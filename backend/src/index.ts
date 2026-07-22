@@ -8,12 +8,13 @@ import { createRecommendationAgent } from "./agents/recommendation";
 import { OllamaLlmProvider } from "./providers/LlmProvider/implementations/OllamaLlmProvider";
 import { Message } from "./providers/LlmProvider/interfaces/ILlmProvider";
 import { QdrantCompanyRepository } from "./repositories/companyRepository/implementations/QdrantCompanyRepository";
-import { InMemoryProductsRepository } from "./repositories/productsRepository/implementations/InMemoryProductsRepository";
 import { InMemoryOrdersRepository } from "./repositories/ordersRepository/implementations/InMemoryOrdersRepository";
 import { OllamaEmbeddingProvider } from "./providers/EmbeddingProvider/implementations/OllamaEmbeddingProvider";
 import { LangSmithAgentTracingProvider } from "./providers/AgentTracingProvider/implementations/LangSmithAgentTracingProvider";
+import { McpToolProvider } from "./providers/McpToolProvider/McpToolProvider";
 import { AgentRunner } from "./services/AgentRunner";
 import { AgentToolEvent } from "./agents/Tool";
+import { Agent } from "./agents/Agent";
 import { seedCompany } from "./seeds/seedCompany";
 
 const app = express();
@@ -25,30 +26,19 @@ const embedding = new OllamaEmbeddingProvider();
 
 // Banco vetorial (informações institucionais) usado pelo Atendente.
 const companyRepository = QdrantCompanyRepository.getInstance();
-// Bancos em memória usados por Produtos, Pedidos e Recomendação.
-const productsRepository = InMemoryProductsRepository.getInstance();
+// Banco em memória de Pedidos (o catálogo de Produtos agora vive no MCP).
 const ordersRepository = InMemoryOrdersRepository.getInstance();
-
-companyRepository.ensureCollection().then(() => {
-  seedCompany(companyRepository, embedding);
-});
 
 const runner = new AgentRunner(provider, tracer);
 
-// Sub-agentes especialistas.
-const attendantAgent = createAttendantAgent(companyRepository, embedding);
-const productsAgent = createProductsAgent(productsRepository);
-const ordersAgent = createOrdersAgent(productsRepository, ordersRepository);
-const recommendationAgent = createRecommendationAgent();
-
-// Coordenador: detém o contexto e delega aos especialistas.
-const coordinatorAgent = createCoordinatorAgent({
-  runner,
-  attendantAgent,
-  productsAgent,
-  ordersAgent,
-  recommendationAgent,
+// Servidor MCP externo que expõe o catálogo de produtos ao agente de Produtos.
+const productsMcp = new McpToolProvider({
+  url: process.env["PRODUCTS_MCP_URL"] ?? "http://products-mcp:3001/mcp",
 });
+
+// O Coordenador é montado no bootstrap, pois o agente de Produtos depende de
+// uma conexão assíncrona com o servidor MCP.
+let coordinatorAgent: Agent;
 
 // Rótulos amigáveis (SSE) para cada ferramenta acionada durante o fluxo.
 const TOOL_STATUS_LABELS: Record<string, string> = {
@@ -132,6 +122,33 @@ app.post("/api/chat", async (req, res) => {
 });
 
 const PORT = process.env["PORT"] ?? 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+async function bootstrap() {
+  // Prepara o banco vetorial institucional usado pelo Atendente.
+  await companyRepository.ensureCollection();
+  seedCompany(companyRepository, embedding);
+
+  // Sub-agentes especialistas. O de Produtos descobre suas ferramentas via MCP.
+  const attendantAgent = createAttendantAgent(companyRepository, embedding);
+  const productsAgent = await createProductsAgent(productsMcp);
+  const ordersAgent = createOrdersAgent(productsMcp, ordersRepository);
+  const recommendationAgent = createRecommendationAgent();
+
+  // Coordenador: detém o contexto e delega aos especialistas.
+  coordinatorAgent = createCoordinatorAgent({
+    runner,
+    attendantAgent,
+    productsAgent,
+    ordersAgent,
+    recommendationAgent,
+  });
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+bootstrap().catch((error) => {
+  console.error("Falha ao iniciar o servidor:", error);
+  process.exit(1);
 });

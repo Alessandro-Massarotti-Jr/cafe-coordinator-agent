@@ -1,0 +1,11 @@
+FROM node:24-alpine
+
+USER node
+
+WORKDIR /home/node/app
+
+COPY package*.json ./
+
+EXPOSE 3001
+
+CMD [ "/home/node/app/.docker/start-dev.sh" ]

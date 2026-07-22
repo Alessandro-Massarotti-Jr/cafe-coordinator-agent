@@ -1,16 +1,15 @@
 import { Agent } from "../Agent";
-import { ListProductsTool } from "./tools/ListProductsTool";
-import { FindProductTool } from "./tools/FindProductTool";
-import { GetProductDetailsTool } from "./tools/GetProductDetailsTool";
-import { IProductsRepository } from "../../repositories/productsRepository/interfaces/IProductsRepository";
+import { McpToolProvider } from "../../providers/McpToolProvider/McpToolProvider";
 
 /**
- * Agente de Produtos: consulta o catálogo (banco em memória) e responde sobre
- * produtos disponíveis, preços, estoque e detalhes.
+ * Agente de Produtos: consulta o catálogo através de um servidor MCP externo
+ * (products-mcp) e responde sobre produtos disponíveis, preços, estoque e
+ * detalhes. As ferramentas não vivem mais dentro do agente: elas são
+ * descobertas dinamicamente do servidor MCP.
  */
-export function createProductsAgent(
-  productsRepository: IProductsRepository,
-): Agent {
+export async function createProductsAgent(
+  productsMcp: McpToolProvider,
+): Promise<Agent> {
   const agent = Agent.create({
     model: "gemma4",
     name: "Produtos",
@@ -36,9 +35,9 @@ Tom: claro e prestativo. Use listas para apresentar vários produtos.
     `,
   });
 
-  agent.addTool(ListProductsTool.create(productsRepository));
-  agent.addTool(FindProductTool.create(productsRepository));
-  agent.addTool(GetProductDetailsTool.create(productsRepository));
+  // Descobre as ferramentas do servidor MCP de Produtos e as registra no agente.
+  const tools = await productsMcp.loadTools();
+  tools.forEach((tool) => agent.addTool(tool));
 
   return agent;
 }

@@ -3,15 +3,15 @@ import { CreateOrderTool } from "./tools/CreateOrderTool";
 import { GetOrderTool } from "./tools/GetOrderTool";
 import { ListOrdersTool } from "./tools/ListOrdersTool";
 import { UpdateOrderStatusTool } from "./tools/UpdateOrderStatusTool";
-import { IProductsRepository } from "../../repositories/productsRepository/interfaces/IProductsRepository";
+import { McpToolProvider } from "../../providers/McpToolProvider/McpToolProvider";
 import { IOrdersRepository } from "../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
 /**
  * Agente de Pedidos: registra e consulta pedidos no banco em memória.
- * Valida produtos e estoque através do catálogo.
+ * Valida produtos e estoque através do MCP de Produtos.
  */
 export function createOrdersAgent(
-  productsRepository: IProductsRepository,
+  productsMcp: McpToolProvider,
   ordersRepository: IOrdersRepository,
 ): Agent {
   const agent = Agent.create({
@@ -40,7 +40,7 @@ Tom: organizado e confiável. Confirme sempre os detalhes do pedido.
     `,
   });
 
-  agent.addTool(CreateOrderTool.create(productsRepository, ordersRepository));
+  agent.addTool(CreateOrderTool.create(productsMcp, ordersRepository));
   agent.addTool(GetOrderTool.create(ordersRepository));
   agent.addTool(ListOrdersTool.create(ordersRepository));
   agent.addTool(UpdateOrderStatusTool.create(ordersRepository));

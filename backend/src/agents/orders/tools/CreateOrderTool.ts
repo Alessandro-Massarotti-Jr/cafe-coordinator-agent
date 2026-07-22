@@ -1,29 +1,50 @@
 import { Tool } from "../../Tool";
-import { IProductsRepository } from "../../../repositories/productsRepository/interfaces/IProductsRepository";
-import { IOrdersRepository } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
-import { OrderItem } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
+import { McpToolProvider } from "../../../providers/McpToolProvider/McpToolProvider";
+import {
+  IOrdersRepository,
+  OrderItem,
+} from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
 type RawItem = { productId: string; quantity: number };
 
+/** Produto retornado pelo MCP de Produtos (getProductDetails). */
+type McpProduct = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+};
+
 /**
- * Cria um pedido validando produtos e estoque. Debita o estoque dos produtos
- * pedidos e registra o pedido no repositório em memória.
+ * Resposta padrão das ferramentas do MCP de Produtos. Em caso de erro (ex.:
+ * produto inexistente), `isError` é true e `data` é null.
+ */
+type McpToolResponse<T> = {
+  isError: boolean;
+  userFriendlyMessage: string;
+  data: T | null;
+};
+
+/**
+ * Cria um pedido validando produtos e estoque através do MCP de Produtos, que é
+ * a fonte de verdade do catálogo. Calcula o total e registra o pedido no
+ * repositório em memória.
+ *
+ * O MCP é somente leitura: o estoque não é debitado aqui — a validação garante
+ * apenas que há estoque suficiente no momento da criação.
  */
 export class CreateOrderTool extends Tool {
-  private products: IProductsRepository;
+  private productsMcp: McpToolProvider;
   private orders: IOrdersRepository;
 
-  private constructor(
-    products: IProductsRepository,
-    orders: IOrdersRepository,
-  ) {
+  private constructor(productsMcp: McpToolProvider, orders: IOrdersRepository) {
     super({
       name: "createOrder",
       description:
         "Cria um novo pedido para o cliente. Valida a existência dos produtos e o estoque disponível, calcula o total e registra o pedido. Use apenas quando o cliente confirmar o que deseja pedir.",
     });
 
-    this.products = products;
+    this.productsMcp = productsMcp;
     this.orders = orders;
 
     this.addParameter({
@@ -62,13 +83,13 @@ export class CreateOrderTool extends Tool {
   }
 
   public static create(
-    products: IProductsRepository,
+    productsMcp: McpToolProvider,
     orders: IOrdersRepository,
   ): CreateOrderTool {
-    return new CreateOrderTool(products, orders);
+    return new CreateOrderTool(productsMcp, orders);
   }
 
-  public execute({
+  public async execute({
     customerName,
     items,
   }: {
@@ -84,9 +105,9 @@ export class CreateOrderTool extends Tool {
 
     const orderItems: OrderItem[] = [];
 
-    // Valida todos os itens antes de debitar qualquer estoque.
+    // Valida todos os itens consultando o MCP de Produtos (fonte de verdade).
     for (const item of items) {
-      const product = this.products.findById(item.productId ?? "");
+      const product = await this.findProduct(item.productId ?? "");
       if (!product) {
         return {
           success: false,
@@ -116,11 +137,6 @@ export class CreateOrderTool extends Tool {
       });
     }
 
-    // Debita o estoque agora que todos os itens são válidos.
-    for (const item of orderItems) {
-      this.products.decrementStock(item.productId, item.quantity);
-    }
-
     const total = Number(
       orderItems.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2),
     );
@@ -132,5 +148,23 @@ export class CreateOrderTool extends Tool {
     });
 
     return { success: true, order };
+  }
+
+  /**
+   * Busca um produto pelo código no MCP de Produtos. Retorna `undefined` quando
+   * o produto não existe ou o MCP responde com erro.
+   */
+  private async findProduct(productId: string): Promise<McpProduct | undefined> {
+    if (!productId) return undefined;
+
+    const response = (await this.productsMcp.callTool("getProductDetails", {
+      productId,
+    })) as McpToolResponse<{ product: McpProduct }>;
+
+    if (!response || response.isError || !response.data) {
+      return undefined;
+    }
+
+    return response.data.product;
   }
 }

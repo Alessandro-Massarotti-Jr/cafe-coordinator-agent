@@ -13,6 +13,19 @@ services:
       - "3000"
     depends_on:
       - ollama
+      - products-mcp
+
+  products-mcp:
+    build:
+      context: ./products-mcp
+      dockerfile: ./.docker/Dockerfile.dev
+    command: "/home/node/app/.docker/start-dev.sh"
+    volumes:
+      - ./products-mcp:/home/node/app:cached
+    environment:
+      - PORT=3001
+    expose:
+      - "3001"
 
   frontend:
     image: nginx:alpine
