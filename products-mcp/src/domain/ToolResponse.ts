@@ -4,5 +4,5 @@ export type ToolResponse = {
   isRetryable?: boolean | null;
   message: string;
   userFriendlyMessage: string;
-  data?: any;
+  data?: unknown;
 };

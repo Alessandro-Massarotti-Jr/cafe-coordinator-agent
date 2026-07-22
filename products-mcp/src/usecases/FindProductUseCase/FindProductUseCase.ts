@@ -3,11 +3,11 @@ import { IProductsRepository } from "../../repositories/ProductsRepository/IProd
 import { FindProductUseCaseDTO } from "./FindProductUseCaseDTO";
 
 export class FindProductUseCase {
-  constructor(private readonly repository: IProductsRepository) {}
+  constructor(private readonly productRepository: IProductsRepository) {}
 
   public async execute(input: FindProductUseCaseDTO) {
     try {
-      const products = this.repository.search(input.term);
+      const products = await this.productRepository.search(input.term);
       return { count: products.length, products };
     } catch (error) {
       if (error instanceof CustomError) {

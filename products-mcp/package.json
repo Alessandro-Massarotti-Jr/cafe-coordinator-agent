@@ -7,17 +7,27 @@
     "build": "npx tsc",
     "start:dev": "npx ts-node src/index.ts",
     "start": "node build/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "npx eslint src",
+    "lint:fix": "npx eslint src --fix",
+    "test": "npx jest",
+    "test:watch": "npx jest --watch",
+    "test:coverage": "npx jest --coverage"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
+    "eslint": "^10.7.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.65.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
