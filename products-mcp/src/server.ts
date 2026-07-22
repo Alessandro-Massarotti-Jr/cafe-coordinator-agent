@@ -24,7 +24,7 @@ export function createProductsMcpServer(): McpServer {
     {
       title: "Listar produtos",
       description:
-        "Lista os produtos do cardápio da padaria com preço, estoque e disponibilidade. Use para responder 'o que vocês têm?' ou mostrar o catálogo.",
+        "Lista os produtos do cardápio da cafeteria com preço, estoque e disponibilidade. Use para responder 'o que vocês têm?' ou mostrar o catálogo.",
       inputSchema: {
         includeUnavailable: z
           .boolean()
@@ -43,7 +43,7 @@ export function createProductsMcpServer(): McpServer {
     {
       title: "Buscar produto",
       description:
-        "Busca produtos do cardápio por nome, categoria ou palavra-chave (ex.: 'chocolate', 'café', 'pão'). Retorna os produtos que combinam com o termo.",
+        "Busca produtos do cardápio por nome, categoria ou palavra-chave (ex.: 'chocolate', 'café', 'cappuccino'). Retorna os produtos que combinam com o termo.",
       inputSchema: {
         term: z
           .string()

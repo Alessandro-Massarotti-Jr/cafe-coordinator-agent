@@ -9,12 +9,6 @@ type McpToolProps = {
   parameters: Parameter[];
 };
 
-/**
- * Adapta uma ferramenta remota exposta por um servidor MCP para a interface
- * `Tool` usada pelos agentes. A execução é encaminhada ao servidor MCP via
- * `callTool`, e o resultado (texto contendo JSON) é desserializado de volta
- * para um objeto — mantendo o mesmo contrato das tools locais.
- */
 export class McpTool extends Tool {
   private readonly client: Client;
 

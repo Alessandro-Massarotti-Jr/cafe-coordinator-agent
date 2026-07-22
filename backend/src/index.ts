@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import express from "express";
 import { createCoordinatorAgent } from "./agents/coordinator";
 import { createAttendantAgent } from "./agents/attendant";
@@ -16,6 +17,7 @@ import { AgentRunner } from "./services/AgentRunner";
 import { AgentToolEvent } from "./agents/Tool";
 import { Agent } from "./agents/Agent";
 import { seedCompany } from "./seeds/seedCompany";
+import { openSseStream, sendEvent, startHeartbeat } from "./http/sse";
 
 const app = express();
 app.use(express.json());
@@ -24,25 +26,19 @@ const provider = new OllamaLlmProvider();
 const tracer = new LangSmithAgentTracingProvider();
 const embedding = new OllamaEmbeddingProvider();
 
-// Banco vetorial (informações institucionais) usado pelo Atendente.
 const companyRepository = QdrantCompanyRepository.getInstance();
-// Banco em memória de Pedidos (o catálogo de Produtos agora vive no MCP).
 const ordersRepository = InMemoryOrdersRepository.getInstance();
 
 const runner = new AgentRunner(provider, tracer);
 
-// Servidor MCP externo que expõe o catálogo de produtos ao agente de Produtos.
 const productsMcp = new McpToolProvider({
   url: process.env["PRODUCTS_MCP_URL"] ?? "http://products-mcp:3001/mcp",
 });
 
-// O Coordenador é montado no bootstrap, pois o agente de Produtos depende de
-// uma conexão assíncrona com o servidor MCP.
 let coordinatorAgent: Agent;
 
-// Rótulos amigáveis (SSE) para cada ferramenta acionada durante o fluxo.
 const TOOL_STATUS_LABELS: Record<string, string> = {
-  askAttendant: "Consultando informações da padaria...",
+  askAttendant: "Consultando informações da cafeteria...",
   askProducts: "Consultando o cardápio...",
   manageOrders: "Processando o pedido...",
   askRecommendation: "Preparando uma recomendação...",
@@ -56,29 +52,73 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   updateOrderStatus: "Atualizando o pedido...",
 };
 
-app.post("/api/chat", async (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
+const PENDING_CHAT_TTL_MS = 60_000;
 
-  const emit = (data: object) => res.write(`${JSON.stringify(data)}\n\n`);
+const pendingChats = new Map<string, { messages: Message[]; createdAt: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, pending] of pendingChats) {
+    if (now - pending.createdAt > PENDING_CHAT_TTL_MS) pendingChats.delete(id);
+  }
+}, PENDING_CHAT_TTL_MS).unref();
+
+app.post("/api/chat", (req, res) => {
+  const { messages } = req.body as { messages?: Message[] };
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    res.status(400).json({ error: "messages é obrigatório" });
+    return;
+  }
+
+  const streamId = randomUUID();
+  pendingChats.set(streamId, { messages, createdAt: Date.now() });
+
+  res.status(201).json({ streamId });
+});
+
+app.get("/api/chat/stream/:streamId", async (req, res) => {
+  const streamId = req.params.streamId;
+  const pending = pendingChats.get(streamId);
+
+  if (!pending) {
+    res.status(404).json({ error: "stream não encontrado ou já consumido" });
+    return;
+  }
+
+  pendingChats.delete(streamId);
+
+  openSseStream(res);
+
+  const stopHeartbeat = startHeartbeat(res);
+
+  let eventId = 0;
+  const emit = (event: string, data: object) =>
+    sendEvent(res, { id: ++eventId, event, data });
+
+  let aborted = false;
+  req.on("close", () => {
+    aborted = true;
+    stopHeartbeat();
+  });
 
   const onEvent = (event: AgentToolEvent) => {
+    if (aborted) return;
     if (event.type === "tool_call") {
-      emit({
+      emit("status", {
         type: "tool_call",
         status:
           (event.name && TOOL_STATUS_LABELS[event.name]) ?? "Processando...",
       });
     } else if (event.type === "thinking") {
-      emit({ type: "thinking", status: "Pensando..." });
+      emit("status", { type: "thinking", status: "Pensando..." });
     }
   };
 
+  const { messages } = pending;
+
   let requestRunId = "";
   try {
-    const { messages }: { messages: Message[] } = req.body;
-
     ({ runId: requestRunId } = await tracer.startRun({
       name: "ChatRequest",
       runType: "chain",
@@ -104,7 +144,7 @@ app.post("/api/chat", async (req, res) => {
       outputs: { message: finalMessage },
     });
 
-    emit({ type: "done", message: finalMessage });
+    emit("done", { type: "done", message: finalMessage });
   } catch (error) {
     if (requestRunId) {
       await tracer.endRun({
@@ -112,29 +152,28 @@ app.post("/api/chat", async (req, res) => {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    emit({
-      type: "done",
+    emit("stream_error", {
+      type: "stream_error",
       message:
         "Ops, tive um problema ao processar sua solicitação. Por favor, tente novamente mais tarde.",
     });
+  } finally {
+    stopHeartbeat();
+    if (!res.writableEnded) res.end();
   }
-  res.end();
 });
 
 const PORT = process.env["PORT"] ?? 3000;
 
 async function bootstrap() {
-  // Prepara o banco vetorial institucional usado pelo Atendente.
   await companyRepository.ensureCollection();
   seedCompany(companyRepository, embedding);
 
-  // Sub-agentes especialistas. O de Produtos descobre suas ferramentas via MCP.
   const attendantAgent = createAttendantAgent(companyRepository, embedding);
   const productsAgent = await createProductsAgent(productsMcp);
   const ordersAgent = createOrdersAgent(productsMcp, ordersRepository);
   const recommendationAgent = createRecommendationAgent();
 
-  // Coordenador: detém o contexto e delega aos especialistas.
   coordinatorAgent = createCoordinatorAgent({
     runner,
     attendantAgent,

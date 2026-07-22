@@ -28,10 +28,6 @@ export type CreateOrderInput = {
   total: number;
 };
 
-/**
- * Repositório em memória de pedidos.
- * Usado pelo agente de Pedidos para registrar e consultar pedidos.
- */
 export interface IOrdersRepository {
   create(input: CreateOrderInput): Order;
   findById(id: string): Order | undefined;

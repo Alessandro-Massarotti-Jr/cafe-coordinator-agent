@@ -5,7 +5,7 @@ import { GetProductDetailsUseCase } from "./GetProductDetailsUseCase";
 const getProductDetailsUseCase = {
   execute: jest
     .fn()
-    .mockResolvedValue({ product: { id: "PROD-001", name: "Pão Artesanal" } }),
+    .mockResolvedValue({ product: { id: "PROD-001", name: "Focaccia Italiana" } }),
 } as unknown as jest.Mocked<GetProductDetailsUseCase>;
 
 const getProductDetailsController = new GetProductDetailsController(
@@ -18,7 +18,7 @@ beforeEach(() => {
 
 describe("GetProductDetailsController", () => {
   it("Should return a success response with the product details", async () => {
-    const product = { id: "PROD-001", name: "Pão Artesanal" };
+    const product = { id: "PROD-001", name: "Focaccia Italiana" };
     getProductDetailsUseCase.execute = jest.fn().mockResolvedValue({ product });
 
     const response = await getProductDetailsController.handle({
@@ -33,7 +33,7 @@ describe("GetProductDetailsController", () => {
       data: { product },
       isError: false,
       message: 'Details for product "PROD-001".',
-      userFriendlyMessage: "Here are the details for Pão Artesanal.",
+      userFriendlyMessage: "Here are the details for Focaccia Italiana.",
     });
   });
 

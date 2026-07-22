@@ -19,7 +19,7 @@ beforeEach(() => {
 
 describe("GetProductDetailsUseCase", () => {
   it("Should return the product found by the repository", async () => {
-    const product = { id: "PROD-001", name: "Pão Artesanal" };
+    const product = { id: "PROD-001", name: "Focaccia Italiana" };
     productsRepository.findById = jest.fn().mockReturnValue(product);
 
     const result = await getProductDetailsUseCase.execute({

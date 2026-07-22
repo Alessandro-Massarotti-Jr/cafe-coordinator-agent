@@ -1,9 +1,6 @@
 import { Tool } from "../../Tool";
 import { IOrdersRepository } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
-/**
- * Consulta um pedido específico pelo seu código.
- */
 export class GetOrderTool extends Tool {
   private orders: IOrdersRepository;
 

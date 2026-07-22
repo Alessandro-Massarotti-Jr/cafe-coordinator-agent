@@ -8,11 +8,6 @@ type JsonSchema = {
   items?: JsonSchema;
 };
 
-/**
- * Converte o `inputSchema` (JSON Schema) de uma ferramenta MCP para a lista de
- * `Parameter` usada internamente pelas tools dos agentes. Aceita `unknown` para
- * absorver as pequenas diferenças de tipo do schema devolvido pelo SDK do MCP.
- */
 export function toParameters(input: unknown): Parameter[] {
   const schema = (input ?? {}) as JsonSchema;
   const properties = schema.properties ?? {};

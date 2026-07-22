@@ -25,16 +25,8 @@ type ToolProps = {
   description: string;
 };
 
-/**
- * Evento emitido durante a execução de uma tool, usado para dar feedback
- * em tempo real (SSE) ao cliente enquanto o agente trabalha.
- */
 export type AgentToolEvent = { type: string; name?: string };
 
-/**
- * Contexto opcional injetado pelo AgentRunner na execução de uma tool.
- * Permite que tools que delegam para sub-agentes propaguem tracing e eventos.
- */
 export type ToolContext = {
   parentRunId?: string | undefined;
   onEvent?: ((event: AgentToolEvent) => void) | undefined;

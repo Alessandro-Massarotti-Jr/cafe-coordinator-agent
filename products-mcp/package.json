@@ -1,7 +1,7 @@
 {
   "name": "products-mcp",
   "version": "1.0.0",
-  "description": "Servidor MCP que expõe o catálogo de produtos da Padaria Sabor de Pão.",
+  "description": "Servidor MCP que expõe o catálogo de produtos da Cafeteria Italy Coffee.",
   "main": "build/index.js",
   "scripts": {
     "build": "npx tsc",

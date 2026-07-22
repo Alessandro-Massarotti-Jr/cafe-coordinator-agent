@@ -12,9 +12,6 @@ const VALID_STATUSES: OrderStatus[] = [
   "cancelled",
 ];
 
-/**
- * Atualiza o status de um pedido existente.
- */
 export class UpdateOrderStatusTool extends Tool {
   private orders: IOrdersRepository;
 

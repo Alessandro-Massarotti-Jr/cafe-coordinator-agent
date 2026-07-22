@@ -1,9 +1,6 @@
 import { Tool } from "../../Tool";
 import { IOrdersRepository } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
-/**
- * Lista pedidos, opcionalmente filtrando pelo nome do cliente.
- */
 export class ListOrdersTool extends Tool {
   private orders: IOrdersRepository;
 

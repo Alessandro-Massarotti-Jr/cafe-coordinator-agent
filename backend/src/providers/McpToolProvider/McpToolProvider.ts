@@ -6,11 +6,6 @@ import { McpTool } from "./McpTool";
 import { parseMcpResult } from "./parseMcpResult";
 import { toParameters } from "./schema";
 
-/**
- * Conecta-se a um servidor MCP via Streamable HTTP, descobre as ferramentas
- * disponíveis e as expõe como instâncias de `Tool` prontas para serem
- * adicionadas a um agente.
- */
 export class McpToolProvider {
   private readonly url: string;
   private readonly clientName: string;
@@ -29,10 +24,6 @@ export class McpToolProvider {
     this.client = client;
   }
 
-  /**
-   * Descobre as ferramentas do servidor MCP e as converte em `Tool[]`.
-   * Conecta automaticamente caso ainda não esteja conectado.
-   */
   public async loadTools(): Promise<Tool[]> {
     await this.connect();
     const client = this.client!;
@@ -50,12 +41,6 @@ export class McpToolProvider {
     );
   }
 
-  /**
-   * Chama uma ferramenta do servidor MCP diretamente (sem passar por um agente)
-   * e devolve o payload já desserializado. Útil para código do backend que
-   * precisa consultar o MCP de forma programática (ex.: validar produtos ao
-   * criar um pedido). Conecta automaticamente caso ainda não esteja conectado.
-   */
   public async callTool(
     name: string,
     args: Record<string, unknown> = {},

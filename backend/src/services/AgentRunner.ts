@@ -10,11 +10,8 @@ import { AgentToolEvent } from "../agents/Tool";
 type RunParams = {
   agent: Agent;
   messages: Message[];
-  /** Run pai para aninhar o tracing (ex.: run da requisição ou de um agente que delega). */
   parentRunId?: string | undefined;
-  /** Nome amigável do run no tracing. */
   label?: string | undefined;
-  /** Callback para feedback em tempo real (SSE). */
   onEvent?: ((event: AgentToolEvent) => void) | undefined;
 };
 
@@ -29,11 +26,6 @@ const EMPTY_USAGE: LlmUsage = {
   total_tokens: 0,
 };
 
-/**
- * Executa um agente até obter uma resposta final, resolvendo automaticamente
- * o ciclo de chamadas de ferramentas (tool calls). É reutilizado tanto pelo
- * agente Coordenador quanto pelos sub-agentes que ele delega.
- */
 export class AgentRunner {
   constructor(
     private readonly provider: ILlmProvider,

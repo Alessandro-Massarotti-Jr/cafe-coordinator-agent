@@ -9,22 +9,22 @@ export class MemoryProductsRepository implements IProductsRepository {
     this.products = [
       {
         id: "PROD-001",
-        name: "Pão Artesanal",
-        category: "Pães",
+        name: "Focaccia Italiana",
+        category: "Panificação",
         price: 12.0,
         stock: 30,
         description:
-          "Pão de fermentação natural de 12 horas, farinha de trigo integral e sal marinho. Casca crocante e miolo macio. Peso 500g.",
-        availability: "Todos os dias a partir das 7h.",
+          "Focaccia de fermentação natural de 12 horas, azeite extravirgem italiano, alecrim e sal grosso. Crocante por fora e aerada por dentro. Peso 200g.",
+        availability: "Todos os dias a partir das 8h.",
       },
       {
         id: "PROD-002",
-        name: "Bolo de Chocolate Belga",
-        category: "Bolos",
+        name: "Torta Tiramisù",
+        category: "Doces",
         price: 85.0,
         stock: 5,
         description:
-          "Bolo úmido de chocolate belga 70% cacau, recheado com ganache e coberto com calda de chocolate. Serve de 10 a 12 pessoas. Peso 1,2kg.",
+          "Tiramisù tradicional montado em camadas de biscoito savoiardi embebido em espresso da casa, creme de mascarpone e cacau em pó. Serve de 10 a 12 pessoas. Peso 1,2kg.",
         availability: "Sob encomenda com 24 horas de antecedência.",
       },
       {
@@ -35,7 +35,7 @@ export class MemoryProductsRepository implements IProductsRepository {
         stock: 50,
         description:
           "Croissant folhado com manteiga francesa AOP, massa laminada com 27 camadas. Crocante por fora e amanteigado por dentro. Peso 90g.",
-        availability: "Todos os dias a partir das 6h30, até esgotar o estoque.",
+        availability: "Todos os dias a partir das 7h, até esgotar o estoque.",
       },
       {
         id: "PROD-004",
@@ -44,7 +44,7 @@ export class MemoryProductsRepository implements IProductsRepository {
         price: 6.0,
         stock: 200,
         description:
-          "Espresso encorpado feito com blend de grãos arábica torrados na casa. Servido em xícara de 50ml.",
+          "Espresso encorpado feito com blend italiano de grãos 100% arábica torrados na nossa própria torrefação. Servido em xícara de 50ml.",
         availability: "Todos os dias durante o horário de funcionamento.",
       },
       {
@@ -59,13 +59,13 @@ export class MemoryProductsRepository implements IProductsRepository {
       },
       {
         id: "PROD-006",
-        name: "Coxinha de Frango",
+        name: "Panini Caprese",
         category: "Salgados",
-        price: 8.0,
+        price: 24.0,
         stock: 0,
         description:
-          "Salgado frito de massa de batata com recheio cremoso de frango desfiado e requeijão.",
-        availability: "Disponível a partir das 10h (temporariamente esgotado).",
+          "Panini prensado na chapa com mussarela de búfala, tomate italiano, manjericão fresco e azeite extravirgem, no pão ciabatta.",
+        availability: "Disponível a partir das 11h (temporariamente esgotado).",
       },
     ];
   }

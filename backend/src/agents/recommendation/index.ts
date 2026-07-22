@@ -1,19 +1,11 @@
 import { Agent } from "../Agent";
 
-/**
- * Agente de Recomendação: sugere produtos ao cliente com base no que ele pediu,
- * no contexto e na lista de produtos disponíveis QUE RECEBE na tarefa.
- *
- * Não possui ferramentas: ele não consulta o catálogo por conta própria. Os
- * produtos disponíveis devem ser fornecidos pelo Coordenador. Se não receber
- * essa lista, ele deve pedi-la em vez de inventar sugestões.
- */
 export function createRecommendationAgent(): Agent {
   const agent = Agent.create({
     model: "gemma4",
     name: "Recomendacao",
     instruction: `
-Você é o especialista em Recomendações da Padaria Sabor de Pão.
+Você é o especialista em Recomendações da Cafeteria Italy Coffee.
 
 Sua responsabilidade:
 - Recomendar os produtos mais adequados ao que o cliente deseja, considerando o contexto (ocasião, preferências, orçamento) e APENAS a lista de produtos disponíveis que você recebe na tarefa.

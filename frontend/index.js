@@ -41,6 +41,49 @@ function setLoading(loading) {
   inputEl.disabled = loading;
 }
 
+async function createChatStream(messages) {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const { streamId } = await res.json();
+  return streamId;
+}
+
+function consumeChatStream(streamId, { onStatus }) {
+  return new Promise((resolve, reject) => {
+    const es = new EventSource(`/api/chat/stream/${streamId}`);
+    let settled = false;
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      es.close();
+      fn(value);
+    };
+
+    es.addEventListener("status", (e) => onStatus(JSON.parse(e.data)));
+
+    es.addEventListener("done", (e) =>
+      finish(resolve, JSON.parse(e.data).message ?? "(sem resposta)")
+    );
+
+    es.addEventListener("stream_error", (e) =>
+      finish(reject, new Error(JSON.parse(e.data).message))
+    );
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        finish(reject, new Error("Conexão encerrada pelo servidor."));
+      }
+    };
+  });
+}
+
 async function send() {
   const content = inputEl.value.trim();
   if (!content) return;
@@ -54,45 +97,23 @@ async function send() {
   const typing = addTyping();
 
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history }),
+    const streamId = await createChatStream(history);
+
+    const reply = await consumeChatStream(streamId, {
+      onStatus: (status) => updateStatus(typing, status),
     });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const event = JSON.parse(line);
-        if (event.type === "done") {
-          typing.remove();
-          const reply = event.message ?? "(sem resposta)";
-          addMessage("assistant", reply);
-          history.push({ role: "assistant", content: reply });
-        } else {
-          updateStatus(typing, event);
-          await new Promise((r) => setTimeout(r, 0));
-        }
-      }
-    }
-  } catch {
+    typing.remove();
+    addMessage("assistant", reply);
+    history.push({ role: "assistant", content: reply });
+  } catch (error) {
     typing.remove();
     const el = document.createElement("div");
     el.className = "error-msg";
-    el.textContent = "Erro ao conectar com o servidor.";
+    el.textContent = error?.message || "Erro ao conectar com o servidor.";
     messagesEl.appendChild(el);
   } finally {
+    typing.remove();
     setLoading(false);
     inputEl.focus();
   }

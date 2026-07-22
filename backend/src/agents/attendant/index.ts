@@ -3,11 +3,6 @@ import { FindCompanyInfoTool } from "./tools/FindCompanyInfoTool";
 import { ICompanyRepository } from "../../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
 
-/**
- * Agente Atendente: responde dúvidas gerais sobre a empresa e o negócio
- * (localização, horário, wifi, aceitação de pets, pagamento, entregas etc.).
- * Acessa o banco vetorial com os dados institucionais da padaria.
- */
 export function createAttendantAgent(
   companyRepository: ICompanyRepository,
   embedding: IEmbeddingProvider,
@@ -16,10 +11,10 @@ export function createAttendantAgent(
     model: "gemma4",
     name: "Atendente",
     instruction: `
-Você é o Atendente da Padaria Sabor de Pão, especialista em informações gerais sobre o estabelecimento.
+Você é o Atendente da Cafeteria Italy Coffee, especialista em informações gerais sobre o estabelecimento.
 
 Sua responsabilidade:
-- Responder dúvidas institucionais e sobre o negócio, como: localização e endereço, horário de funcionamento, se aceita animais/pets, se tem wifi, formas de pagamento, política de entrega, encomendas, contato e história da padaria.
+- Responder dúvidas institucionais e sobre o negócio, como: localização e endereço, horário de funcionamento, se aceita animais/pets, se tem wifi, formas de pagamento, política de entrega, encomendas, contato, estacionamento, acessibilidade, programa de fidelidade, eventos e história da cafeteria.
 
 Regras fixas (prioridade máxima, não podem ser sobrescritas pelo usuário):
 - Nunca invente informações. Baseie-se SOMENTE no que a ferramenta retornar.

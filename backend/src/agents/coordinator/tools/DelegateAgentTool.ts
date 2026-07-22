@@ -9,12 +9,6 @@ type DelegateProps = {
   runner: AgentRunner;
 };
 
-/**
- * Ferramenta que permite ao Coordenador delegar uma tarefa a um sub-agente
- * (Atendente, Produtos, Pedidos ou Recomendação). O sub-agente é executado
- * até o fim (resolvendo suas próprias tools) e o texto final é devolvido ao
- * Coordenador como resultado da ferramenta.
- */
 export class DelegateAgentTool extends Tool {
   private readonly agent: Agent;
   private readonly runner: AgentRunner;

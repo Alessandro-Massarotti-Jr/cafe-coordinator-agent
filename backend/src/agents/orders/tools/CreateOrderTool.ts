@@ -7,7 +7,6 @@ import {
 
 type RawItem = { productId: string; quantity: number };
 
-/** Produto retornado pelo MCP de Produtos (getProductDetails). */
 type McpProduct = {
   id: string;
   name: string;
@@ -15,24 +14,12 @@ type McpProduct = {
   stock: number;
 };
 
-/**
- * Resposta padrão das ferramentas do MCP de Produtos. Em caso de erro (ex.:
- * produto inexistente), `isError` é true e `data` é null.
- */
 type McpToolResponse<T> = {
   isError: boolean;
   userFriendlyMessage: string;
   data: T | null;
 };
 
-/**
- * Cria um pedido validando produtos e estoque através do MCP de Produtos, que é
- * a fonte de verdade do catálogo. Calcula o total e registra o pedido no
- * repositório em memória.
- *
- * O MCP é somente leitura: o estoque não é debitado aqui — a validação garante
- * apenas que há estoque suficiente no momento da criação.
- */
 export class CreateOrderTool extends Tool {
   private productsMcp: McpToolProvider;
   private orders: IOrdersRepository;
@@ -105,7 +92,6 @@ export class CreateOrderTool extends Tool {
 
     const orderItems: OrderItem[] = [];
 
-    // Valida todos os itens consultando o MCP de Produtos (fonte de verdade).
     for (const item of items) {
       const product = await this.findProduct(item.productId ?? "");
       if (!product) {
@@ -150,10 +136,6 @@ export class CreateOrderTool extends Tool {
     return { success: true, order };
   }
 
-  /**
-   * Busca um produto pelo código no MCP de Produtos. Retorna `undefined` quando
-   * o produto não existe ou o MCP responde com erro.
-   */
   private async findProduct(productId: string): Promise<McpProduct | undefined> {
     if (!productId) return undefined;
 

@@ -2,10 +2,6 @@ import { Tool } from "../../Tool";
 import { ICompanyRepository } from "../../../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../../../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
 
-/**
- * Busca informações institucionais da empresa no banco vetorial:
- * endereço, horário, wifi, aceitação de pets, formas de pagamento, entregas etc.
- */
 export class FindCompanyInfoTool extends Tool {
   private repository: ICompanyRepository;
   private embedding: IEmbeddingProvider;
@@ -17,7 +13,7 @@ export class FindCompanyInfoTool extends Tool {
     super({
       name: "findCompanyInfo",
       description:
-        "Busca informações gerais sobre a padaria: endereço e localização, horário de funcionamento, se aceita animais/pets, se tem wifi, formas de pagamento, política de entrega, encomendas e outras informações institucionais.",
+        "Busca informações gerais sobre a cafeteria: endereço e localização, horário de funcionamento, se aceita animais/pets, se tem wifi, formas de pagamento, estacionamento, acessibilidade, programa de fidelidade, política de entrega, encomendas e outras informações institucionais.",
     });
 
     this.repository = repository;

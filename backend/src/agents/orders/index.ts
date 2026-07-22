@@ -6,10 +6,6 @@ import { UpdateOrderStatusTool } from "./tools/UpdateOrderStatusTool";
 import { McpToolProvider } from "../../providers/McpToolProvider/McpToolProvider";
 import { IOrdersRepository } from "../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
-/**
- * Agente de Pedidos: registra e consulta pedidos no banco em memória.
- * Valida produtos e estoque através do MCP de Produtos.
- */
 export function createOrdersAgent(
   productsMcp: McpToolProvider,
   ordersRepository: IOrdersRepository,
@@ -18,7 +14,7 @@ export function createOrdersAgent(
     model: "gemma4",
     name: "Pedidos",
     instruction: `
-Você é o especialista em Pedidos da Padaria Sabor de Pão.
+Você é o especialista em Pedidos da Cafeteria Italy Coffee.
 
 Sua responsabilidade:
 - Registrar novos pedidos, consultar pedidos existentes e atualizar o status deles.

@@ -26,7 +26,7 @@ describe("MemoryProductsRepository", () => {
       const products = productsRepository.findAll();
       products[0]!.name = "mutated";
 
-      expect(productsRepository.findAll()[0]!.name).toBe("Pão Artesanal");
+      expect(productsRepository.findAll()[0]!.name).toBe("Focaccia Italiana");
     });
   });
 
@@ -53,7 +53,7 @@ describe("MemoryProductsRepository", () => {
 
       expect(product).toMatchObject({
         id: "PROD-002",
-        name: "Bolo de Chocolate Belga",
+        name: "Torta Tiramisù",
       });
     });
 
