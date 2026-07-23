@@ -1,5 +1,9 @@
 import { Tool } from "../../Tool";
-import { IOrdersRepository } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
+import { ToolResponse, toolSuccess } from "../../ToolResponse";
+import {
+  IOrdersRepository,
+  Order,
+} from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
 export class GetOrderTool extends Tool {
   private orders: IOrdersRepository;
@@ -25,11 +29,25 @@ export class GetOrderTool extends Tool {
     return new GetOrderTool(orders);
   }
 
-  public execute({ orderId }: { orderId: string }) {
+  public async execute({
+    orderId,
+  }: {
+    orderId: string;
+  }): Promise<ToolResponse<Order | null>> {
     const order = this.orders.findById(orderId ?? "");
+
     if (!order) {
-      return { found: false, message: `Pedido "${orderId}" não encontrado.` };
+      return toolSuccess<Order | null>({
+        message: `Nenhum pedido encontrado com o código "${orderId}".`,
+        userFriendlyMessage: `Não encontrei nenhum pedido com o código ${orderId}. Confira se o código está correto.`,
+        data: null,
+      });
     }
-    return { found: true, order };
+
+    return toolSuccess<Order>({
+      message: `Pedido ${order.id} encontrado com status "${order.status}".`,
+      userFriendlyMessage: `Encontrei o pedido ${order.id}.`,
+      data: order,
+    });
   }
 }

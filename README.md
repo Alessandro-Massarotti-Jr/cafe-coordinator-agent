@@ -33,7 +33,7 @@ O Projeto em si seguira a ideia de ser um agente de IA para atendimentos de uma 
 
 ## Agentic Architecture
 
-- [ ] Sempre verificar o stop_reasson do modelo para indicar quando ele parou, evitando antipatterne de pegar na resposta
+- [ ] Sempre verificar o stop_reasson do modelo para indicar quando ele parou, evitando antipattern de pegar na resposta
 - [ ] Usar tools em paralelo para otimizar processo quando o modelo solicitar mais de uma tool
 - [ ] Um agente Coordenador com responsabilidade de chamar outros (Hub-spoke)
 - [ ] Sub agentes recebem somente o contexto necessario para o trabalho, a maior parte fica no Coordenador

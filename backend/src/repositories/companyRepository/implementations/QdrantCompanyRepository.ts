@@ -1,5 +1,10 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { ICompanyRepository } from "../interfaces/ICompanyRepository";
+import {
+  CompanyChunkPayload,
+  CompanySearchResult,
+  ICompanyRepository,
+} from "../interfaces/ICompanyRepository";
+import { withRetry } from "../../../services/retry";
 
 const VECTOR_SIZE = 768;
 
@@ -64,12 +69,18 @@ export class QdrantCompanyRepository implements ICompanyRepository {
   }: {
     vector: number[];
     limit?: number;
-  }): Promise<Array<Record<string, unknown>>> {
-    const results = await this.client.search(this.collection, {
-      vector,
-      limit,
-      with_payload: true,
-    });
-    return results.map((r) => r.payload as Record<string, unknown>);
+  }): Promise<CompanySearchResult[]> {
+    const results = await withRetry(() =>
+      this.client.search(this.collection, {
+        vector,
+        limit,
+        with_payload: true,
+      }),
+    );
+
+    return results.map((result) => ({
+      score: result.score,
+      payload: result.payload as unknown as CompanyChunkPayload,
+    }));
   }
 }

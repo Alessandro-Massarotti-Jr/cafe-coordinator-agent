@@ -5,6 +5,7 @@ import { Tool } from "../../agents/Tool";
 import { McpTool } from "./McpTool";
 import { parseMcpResult } from "./parseMcpResult";
 import { toParameters } from "./schema";
+import { withRetry } from "../../services/retry";
 
 export class McpToolProvider {
   private readonly url: string;
@@ -20,7 +21,7 @@ export class McpToolProvider {
     if (this.client) return;
     const client = new Client({ name: this.clientName, version: "1.0.0" });
     const transport = new StreamableHTTPClientTransport(new URL(this.url));
-    await client.connect(transport as Transport);
+    await withRetry(() => client.connect(transport as Transport));
     this.client = client;
   }
 
@@ -46,7 +47,9 @@ export class McpToolProvider {
     args: Record<string, unknown> = {},
   ): Promise<unknown> {
     await this.connect();
-    const result = await this.client!.callTool({ name, arguments: args });
+    const result = await withRetry(() =>
+      this.client!.callTool({ name, arguments: args }),
+    );
     return parseMcpResult(result);
   }
 

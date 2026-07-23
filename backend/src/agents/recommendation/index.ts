@@ -1,8 +1,9 @@
 import { Agent } from "../Agent";
+import { modelFor } from "../AgentModel";
 
 export function createRecommendationAgent(): Agent {
   const agent = Agent.create({
-    model: "gemma4",
+    model: modelFor("recommendation"),
     name: "Recomendacao",
     instruction: `
 Você é o especialista em Recomendações da Cafeteria Italy Coffee.

@@ -1,7 +1,9 @@
 import { Tool } from "../../Tool";
+import { ToolResponse, toolError, toolSuccess } from "../../ToolResponse";
 import { McpToolProvider } from "../../../providers/McpToolProvider/McpToolProvider";
 import {
   IOrdersRepository,
+  Order,
   OrderItem,
 } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
@@ -82,12 +84,25 @@ export class CreateOrderTool extends Tool {
   }: {
     customerName: string;
     items: RawItem[];
-  }) {
+  }): Promise<ToolResponse<Order>> {
+    if (!customerName || !String(customerName).trim()) {
+      return toolError({
+        errorCategory: "validation",
+        isRetryable: true,
+        message: "O nome do cliente é obrigatório para criar um pedido.",
+        userFriendlyMessage:
+          "Para registrar o pedido, preciso saber o nome do cliente.",
+      });
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
-      return {
-        success: false,
+      return toolError({
+        errorCategory: "validation",
+        isRetryable: true,
         message: "O pedido precisa ter ao menos um item.",
-      };
+        userFriendlyMessage:
+          "Preciso saber quais itens o cliente deseja para registrar o pedido.",
+      });
     }
 
     const orderItems: OrderItem[] = [];
@@ -95,23 +110,29 @@ export class CreateOrderTool extends Tool {
     for (const item of items) {
       const product = await this.findProduct(item.productId ?? "");
       if (!product) {
-        return {
-          success: false,
-          message: `Produto "${item.productId}" não encontrado no catálogo.`,
-        };
+        return toolError({
+          errorCategory: "validation",
+          isRetryable: true,
+          message: `Produto "${item.productId}" não encontrado no catálogo. Confirme o código (formato PROD-XXX) antes de tentar novamente.`,
+          userFriendlyMessage: `Não encontrei o produto ${item.productId} no cardápio.`,
+        });
       }
       const quantity = Number(item.quantity);
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        return {
-          success: false,
-          message: `Quantidade inválida para "${product.name}".`,
-        };
+        return toolError({
+          errorCategory: "validation",
+          isRetryable: true,
+          message: `Quantidade inválida para "${product.name}": ${item.quantity}. Informe um número inteiro maior que zero.`,
+          userFriendlyMessage: `A quantidade informada para ${product.name} não é válida.`,
+        });
       }
       if (product.stock < quantity) {
-        return {
-          success: false,
-          message: `Estoque insuficiente para "${product.name}". Disponível: ${product.stock}.`,
-        };
+        return toolError({
+          errorCategory: "business",
+          isRetryable: false,
+          message: `Estoque insuficiente para "${product.name}". Disponível: ${product.stock}, solicitado: ${quantity}.`,
+          userFriendlyMessage: `No momento temos apenas ${product.stock} unidade(s) de ${product.name} disponíveis.`,
+        });
       }
 
       orderItems.push({
@@ -133,7 +154,11 @@ export class CreateOrderTool extends Tool {
       total,
     });
 
-    return { success: true, order };
+    return toolSuccess({
+      message: `Pedido ${order.id} criado para ${order.customerName} com ${orderItems.length} item(ns), total R$ ${total.toFixed(2)}.`,
+      userFriendlyMessage: `Pedido ${order.id} registrado! Total: R$ ${total.toFixed(2)}.`,
+      data: order,
+    });
   }
 
   private async findProduct(productId: string): Promise<McpProduct | undefined> {

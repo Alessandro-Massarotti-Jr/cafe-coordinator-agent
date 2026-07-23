@@ -1,15 +1,16 @@
+import { AgentModel } from "./AgentModel";
 import { Tool } from "./Tool";
 
 type Props = {
   name: string;
   instruction: string;
-  model: "gemma4";
+  model: AgentModel;
 };
 
 export class Agent {
   private name: string;
   private instruction: string;
-  public model: "gemma4" = "gemma4";
+  public model: AgentModel;
   public readonly tools: Tool[] = [];
 
   private constructor(props: Props) {
@@ -31,6 +32,12 @@ export class Agent {
   }
 
   public getInstructions(): string {
-    return `Seu nome é ${this.name} sua instrução é ${this.instruction}`;
+    return [
+      `# Identidade`,
+      `Você é ${this.name}.`,
+      ``,
+      `# Instruções`,
+      this.instruction.trim(),
+    ].join("\n");
   }
 }

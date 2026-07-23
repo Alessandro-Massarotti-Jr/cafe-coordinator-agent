@@ -6,7 +6,10 @@
   "scripts": {
     "build": "npx tsc",
     "start:dev": "npx ts-node src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "eval": "npx ts-node src/evals/runEval.ts",
+    "test": "npx jest",
+    "test:watch": "npx jest --watch",
+    "test:coverage": "npx jest --coverage"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +19,10 @@
     "@types/axios": "^0.9.36",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
   },

@@ -41,17 +41,20 @@ function setLoading(loading) {
   inputEl.disabled = loading;
 }
 
+let sessionId = null;
+
 async function createChatStream(messages) {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(sessionId ? { messages, sessionId } : { messages }),
   });
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  const { streamId } = await res.json();
-  return streamId;
+  const payload = await res.json();
+  sessionId = payload.sessionId ?? sessionId;
+  return payload.streamId;
 }
 
 function consumeChatStream(streamId, { onStatus }) {
@@ -67,6 +70,10 @@ function consumeChatStream(streamId, { onStatus }) {
     };
 
     es.addEventListener("status", (e) => onStatus(JSON.parse(e.data)));
+
+    es.addEventListener("degraded", (e) =>
+      onStatus({ type: "degraded", status: "Resposta parcial: " + JSON.parse(e.data).reason })
+    );
 
     es.addEventListener("done", (e) =>
       finish(resolve, JSON.parse(e.data).message ?? "(sem resposta)")

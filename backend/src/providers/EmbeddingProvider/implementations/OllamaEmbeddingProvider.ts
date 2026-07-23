@@ -1,5 +1,6 @@
 import axios from "axios";
 import { IEmbeddingProvider } from "../interfaces/IEmbeddingProvider";
+import { withRetry } from "../../../services/retry";
 
 export class OllamaEmbeddingProvider implements IEmbeddingProvider {
   private ollamaUrl: string;
@@ -11,10 +12,12 @@ export class OllamaEmbeddingProvider implements IEmbeddingProvider {
   }
 
   async embed({ text }: { text: string }): Promise<number[]> {
-    const response = await axios.post(`${this.ollamaUrl}/embed`, {
-      model: this.model,
-      input: text,
-    });
+    const response = await withRetry(() =>
+      axios.post(`${this.ollamaUrl}/embed`, {
+        model: this.model,
+        input: text,
+      }),
+    );
     return response.data.embeddings[0] as number[];
   }
 }

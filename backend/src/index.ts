@@ -10,11 +10,17 @@ import { OllamaLlmProvider } from "./providers/LlmProvider/implementations/Ollam
 import { Message } from "./providers/LlmProvider/interfaces/ILlmProvider";
 import { QdrantCompanyRepository } from "./repositories/companyRepository/implementations/QdrantCompanyRepository";
 import { InMemoryOrdersRepository } from "./repositories/ordersRepository/implementations/InMemoryOrdersRepository";
+import { InMemoryEscalationsRepository } from "./repositories/escalationsRepository/implementations/InMemoryEscalationsRepository";
 import { OllamaEmbeddingProvider } from "./providers/EmbeddingProvider/implementations/OllamaEmbeddingProvider";
 import { LangSmithAgentTracingProvider } from "./providers/AgentTracingProvider/implementations/LangSmithAgentTracingProvider";
 import { McpToolProvider } from "./providers/McpToolProvider/McpToolProvider";
 import { AgentRunner } from "./services/AgentRunner";
+import { ContextCompactor } from "./services/ContextCompactor";
+import { ConversationStore } from "./services/ConversationStore";
+import { CustomerMemoryStore } from "./services/CustomerMemoryStore";
+import { createPostToolUseHook } from "./services/hooks/postToolUse";
 import { AgentToolEvent } from "./agents/Tool";
+import { ToolSession } from "./agents/ToolSession";
 import { Agent } from "./agents/Agent";
 import { seedCompany } from "./seeds/seedCompany";
 import { openSseStream, sendEvent, startHeartbeat } from "./http/sse";
@@ -28,8 +34,15 @@ const embedding = new OllamaEmbeddingProvider();
 
 const companyRepository = QdrantCompanyRepository.getInstance();
 const ordersRepository = InMemoryOrdersRepository.getInstance();
+const escalationsRepository = InMemoryEscalationsRepository.getInstance();
 
-const runner = new AgentRunner(provider, tracer);
+const runner = new AgentRunner(provider, tracer, {
+  postToolUse: createPostToolUseHook(),
+});
+
+const compactor = new ContextCompactor(provider);
+const conversations = new ConversationStore(compactor);
+const customerMemory = new CustomerMemoryStore();
 
 const productsMcp = new McpToolProvider({
   url: process.env["PRODUCTS_MCP_URL"] ?? "http://products-mcp:3001/mcp",
@@ -42,6 +55,7 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   askProducts: "Consultando o cardápio...",
   manageOrders: "Processando o pedido...",
   askRecommendation: "Preparando uma recomendação...",
+  escalateToHuman: "Transferindo para um atendente...",
   findCompanyInfo: "Buscando informações...",
   listProducts: "Buscando produtos...",
   findProduct: "Buscando produtos...",
@@ -53,8 +67,16 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
 };
 
 const PENDING_CHAT_TTL_MS = 60_000;
+const CONVERSATION_PRUNE_MS = 15 * 60_000;
 
-const pendingChats = new Map<string, { messages: Message[]; createdAt: number }>();
+type PendingChat = {
+  messages: Message[];
+  sessionId: string;
+  customerId: string | null;
+  createdAt: number;
+};
+
+const pendingChats = new Map<string, PendingChat>();
 
 setInterval(() => {
   const now = Date.now();
@@ -63,8 +85,14 @@ setInterval(() => {
   }
 }, PENDING_CHAT_TTL_MS).unref();
 
+setInterval(() => conversations.prune(), CONVERSATION_PRUNE_MS).unref();
+
 app.post("/api/chat", (req, res) => {
-  const { messages } = req.body as { messages?: Message[] };
+  const { messages, sessionId, customerId } = req.body as {
+    messages?: Message[];
+    sessionId?: string;
+    customerId?: string;
+  };
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "messages é obrigatório" });
@@ -72,9 +100,16 @@ app.post("/api/chat", (req, res) => {
   }
 
   const streamId = randomUUID();
-  pendingChats.set(streamId, { messages, createdAt: Date.now() });
+  const resolvedSessionId = sessionId ?? randomUUID();
 
-  res.status(201).json({ streamId });
+  pendingChats.set(streamId, {
+    messages,
+    sessionId: resolvedSessionId,
+    customerId: customerId ?? null,
+    createdAt: Date.now(),
+  });
+
+  res.status(201).json({ streamId, sessionId: resolvedSessionId });
 });
 
 app.get("/api/chat/stream/:streamId", async (req, res) => {
@@ -115,36 +150,89 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
     }
   };
 
-  const { messages } = pending;
+  const { messages, sessionId, customerId } = pending;
+  const isNewConversation = conversations.isNew(sessionId);
 
   let requestRunId = "";
   try {
     ({ runId: requestRunId } = await tracer.startRun({
       name: "ChatRequest",
       runType: "chain",
-      inputs: { messages },
+      inputs: { messages, sessionId },
       tags: ["chat", "coordinator"],
     }));
 
-    const conversation: Message[] = [
-      { role: "system", content: coordinatorAgent.getInstructions() },
-      ...messages,
-    ];
+    const stored = conversations.getOrCreate(sessionId, customerId ?? undefined);
 
-    const { content: finalMessage } = await runner.run({
+    if (stored.messages.length === 0 && !stored.summary) {
+      conversations.replaceTurns(sessionId, messages);
+    } else {
+      const lastTurn = messages[messages.length - 1];
+      if (lastTurn) conversations.append(sessionId, [lastTurn]);
+    }
+
+    await conversations.compactIfNeeded(sessionId);
+
+    const memory =
+      isNewConversation && customerId
+        ? customerMemory.asContext(customerId)
+        : null;
+
+    const conversation = conversations.buildContext({
+      sessionId,
+      systemPrompt: coordinatorAgent.getInstructions(),
+      customerMemory: memory,
+    });
+
+    const result = await runner.run({
       agent: coordinatorAgent,
       messages: conversation,
       parentRunId: requestRunId,
       label: "Coordenador",
       onEvent,
+      session: new ToolSession(sessionId),
     });
+
+    const finalMessage = result.content;
+
+    conversations.append(sessionId, [
+      { role: "assistant", content: finalMessage },
+    ]);
+
+    if (customerId) {
+      const lastUserMessage = [...messages]
+        .reverse()
+        .find((message) => message.role === "user");
+      if (lastUserMessage) {
+        customerMemory.remember(
+          customerId,
+          `Pediu: "${lastUserMessage.content}". Resposta: "${finalMessage.slice(0, 240)}"`,
+        );
+      }
+    }
 
     await tracer.endRun({
       runId: requestRunId,
       outputs: { message: finalMessage },
     });
 
-    emit("done", { type: "done", message: finalMessage });
+    if (result.degraded || result.limitReached) {
+      emit("degraded", {
+        type: "degraded",
+        partial: true,
+        reason: result.limitReached
+          ? "limite de iterações atingido"
+          : "parte das consultas falhou",
+        failures: result.failures,
+      });
+    }
+
+    emit("done", {
+      type: "done",
+      message: finalMessage,
+      sessionId,
+      partial: result.degraded || result.limitReached,
+    });
   } catch (error) {
     if (requestRunId) {
       await tracer.endRun({
@@ -161,6 +249,10 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
     stopHeartbeat();
     if (!res.writableEnded) res.end();
   }
+});
+
+app.get("/api/escalations", (_req, res) => {
+  res.json({ escalations: escalationsRepository.findAll() });
 });
 
 const PORT = process.env["PORT"] ?? 3000;
@@ -180,6 +272,7 @@ async function bootstrap() {
     productsAgent,
     ordersAgent,
     recommendationAgent,
+    escalationsRepository,
   });
 
   app.listen(PORT, () => {

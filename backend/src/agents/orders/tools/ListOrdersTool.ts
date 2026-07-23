@@ -1,5 +1,9 @@
 import { Tool } from "../../Tool";
-import { IOrdersRepository } from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
+import { ToolResponse, toolSuccess } from "../../ToolResponse";
+import {
+  IOrdersRepository,
+  Order,
+} from "../../../repositories/ordersRepository/interfaces/IOrdersRepository";
 
 export class ListOrdersTool extends Tool {
   private orders: IOrdersRepository;
@@ -26,11 +30,27 @@ export class ListOrdersTool extends Tool {
     return new ListOrdersTool(orders);
   }
 
-  public execute({ customerName }: { customerName?: string }) {
+  public async execute({
+    customerName,
+  }: {
+    customerName?: string;
+  }): Promise<ToolResponse<{ count: number; orders: Order[] }>> {
     const orders = customerName
       ? this.orders.findByCustomer(customerName)
       : this.orders.findAll();
 
-    return { count: orders.length, orders };
+    const scope = customerName ? ` do cliente "${customerName}"` : "";
+
+    return toolSuccess({
+      message:
+        orders.length > 0
+          ? `${orders.length} pedido(s)${scope} encontrados.`
+          : `Nenhum pedido${scope} registrado.`,
+      userFriendlyMessage:
+        orders.length > 0
+          ? `Encontrei ${orders.length} pedido(s)${scope}.`
+          : `Não há pedidos${scope} registrados até agora.`,
+      data: { count: orders.length, orders },
+    });
   }
 }

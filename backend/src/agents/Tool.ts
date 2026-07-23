@@ -1,3 +1,6 @@
+import { ToolResponse } from "./ToolResponse";
+import { ToolSession } from "./ToolSession";
+
 export type Parameter =
   | {
       name: string;
@@ -30,6 +33,7 @@ export type AgentToolEvent = { type: string; name?: string };
 export type ToolContext = {
   parentRunId?: string | undefined;
   onEvent?: ((event: AgentToolEvent) => void) | undefined;
+  session?: ToolSession | undefined;
 };
 
 export abstract class Tool {
@@ -45,7 +49,14 @@ export abstract class Tool {
   public abstract execute(
     params: any,
     context?: ToolContext,
-  ): any | Promise<any>;
+  ): Promise<ToolResponse<unknown>>;
+
+  public checkPrecondition(
+    _params: any,
+    _session?: ToolSession,
+  ): ToolResponse<unknown> | null {
+    return null;
+  }
 
   public addParameter(parameter: Parameter) {
     this.parameters.push(parameter);
