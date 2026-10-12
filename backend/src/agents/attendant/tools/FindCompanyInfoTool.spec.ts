@@ -14,6 +14,7 @@ function repositoryWith(results: CompanySearchResult[]): ICompanyRepository {
     upsert: async () => {},
     deleteBySource: async () => {},
     search: async () => results,
+    listAll: async () => results.map((result) => result.payload),
   };
 }
 
@@ -69,5 +70,26 @@ describe("FindCompanyInfoTool", () => {
 
     expect(result.data?.[0]?.confidence).toBe("baixa");
     expect(result.userFriendlyMessage).toContain("Não tenho essa informação");
+  });
+
+  it("usa a busca por palavra-chave para subir o trecho com o termo exato", async () => {
+    const tool = FindCompanyInfoTool.create(
+      repositoryWith([
+        {
+          score: 0.31,
+          payload: { text: "Pets: aceitamos animais no terraço", source: "company.txt" },
+        },
+        {
+          score: 0.3,
+          payload: { text: "Formas de pagamento: dinheiro e PIX", source: "company.txt" },
+        },
+      ]),
+      embedding,
+    );
+
+    const result = await tool.execute({ query: "aceita pix?" });
+
+    expect(result.data?.[0]?.text).toBe("Formas de pagamento: dinheiro e PIX");
+    expect(result.data?.[0]?.score).toBe(0.3);
   });
 });

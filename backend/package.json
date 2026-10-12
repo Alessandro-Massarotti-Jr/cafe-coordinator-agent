@@ -9,7 +9,8 @@
     "eval": "npx ts-node src/evals/runEval.ts",
     "test": "npx jest",
     "test:watch": "npx jest --watch",
-    "test:coverage": "npx jest --coverage"
+    "test:coverage": "npx jest --coverage",
+    "test:rag": "npx jest --config jest.rag.config.js"
   },
   "keywords": [],
   "author": "",

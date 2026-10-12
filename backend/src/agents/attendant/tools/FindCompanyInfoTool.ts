@@ -2,6 +2,7 @@ import { Tool } from "../../Tool";
 import { ToolResponse, toolSuccess } from "../../ToolResponse";
 import { ICompanyRepository } from "../../../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../../../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
+import { hybridCompanySearch } from "../../../services/rag/hybridCompanySearch";
 
 export class FindCompanyInfoTool extends Tool {
   private repository: ICompanyRepository;
@@ -40,12 +41,16 @@ export class FindCompanyInfoTool extends Tool {
   }: {
     query: string;
   }): Promise<ToolResponse<CompanyInfoResult[]>> {
-    const vector = await this.embedding.embed({ text: query });
-    const results = await this.repository.search({ vector });
+    const results = await hybridCompanySearch({
+      query,
+      repository: this.repository,
+      embedding: this.embedding,
+      limit: SEARCH_LIMIT,
+    });
 
     const passages: CompanyInfoResult[] = results.map((result) => ({
-      score: Number(result.score.toFixed(4)),
-      confidence: confidenceOf(result.score),
+      score: Number(result.similarity.toFixed(4)),
+      confidence: confidenceOf(result.similarity),
       section: result.payload.section ?? null,
       title: result.payload.title ?? null,
       source: result.payload.source ?? null,
@@ -82,6 +87,7 @@ type CompanyInfoResult = {
   text: string;
 };
 
+const SEARCH_LIMIT = 3;
 const HIGH_CONFIDENCE_SCORE = 0.7;
 const LOW_CONFIDENCE_SCORE = 0.45;
 

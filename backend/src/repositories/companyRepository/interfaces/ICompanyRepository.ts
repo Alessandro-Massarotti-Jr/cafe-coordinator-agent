@@ -24,4 +24,6 @@ export interface ICompanyRepository {
     vector: number[];
     limit?: number;
   }): Promise<CompanySearchResult[]>;
+
+  listAll(): Promise<CompanyChunkPayload[]>;
 }

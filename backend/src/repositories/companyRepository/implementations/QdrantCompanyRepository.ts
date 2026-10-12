@@ -7,6 +7,7 @@ import {
 import { withRetry } from "../../../services/retry";
 
 const VECTOR_SIZE = 768;
+const SCROLL_PAGE_SIZE = 256;
 
 export class QdrantCompanyRepository implements ICompanyRepository {
   private client: QdrantClient;
@@ -82,5 +83,30 @@ export class QdrantCompanyRepository implements ICompanyRepository {
       score: result.score,
       payload: result.payload as unknown as CompanyChunkPayload,
     }));
+  }
+
+  async listAll(): Promise<CompanyChunkPayload[]> {
+    const payloads: CompanyChunkPayload[] = [];
+    let offset: string | number | undefined;
+
+    do {
+      const page = await withRetry(() =>
+        this.client.scroll(this.collection, {
+          limit: SCROLL_PAGE_SIZE,
+          with_payload: true,
+          with_vector: false,
+          ...(offset === undefined ? {} : { offset }),
+        }),
+      );
+
+      for (const point of page.points) {
+        payloads.push(point.payload as unknown as CompanyChunkPayload);
+      }
+
+      const next = page.next_page_offset;
+      offset = typeof next === "string" || typeof next === "number" ? next : undefined;
+    } while (offset !== undefined);
+
+    return payloads.sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
   }
 }

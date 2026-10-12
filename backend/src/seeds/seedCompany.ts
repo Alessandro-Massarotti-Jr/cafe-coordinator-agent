@@ -3,8 +3,8 @@ import * as path from "path";
 import { ICompanyRepository } from "../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
 
-const TARGET_CHUNK_SIZE = 700;
-const OVERLAP_SENTENCES = 1;
+const MAX_CHUNK_SIZE = 300;
+const DEFAULT_SECTION = "Geral";
 const SOURCE = "company.txt";
 
 export type CompanyChunk = {
@@ -14,43 +14,12 @@ export type CompanyChunk = {
   chunkIndex: number;
 };
 
-type Section = {
-  title: string;
-  paragraphs: string[];
-};
-
 function isHeading(paragraph: string): boolean {
-  if (paragraph.includes("\n")) return false;
-  if (paragraph.length > 80) return false;
-  if (/^#{1,6}\s/.test(paragraph)) return true;
-  return !/[.!?]$/.test(paragraph.trim());
+  return !/[.!?:]/.test(paragraph);
 }
 
-function cleanHeading(paragraph: string): string {
-  return paragraph.replace(/^#{1,6}\s*/, "").replace(/:$/, "").trim();
-}
-
-export function splitSections(text: string): Section[] {
-  const paragraphs = text
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  const sections: Section[] = [];
-  let current: Section = { title: "Geral", paragraphs: [] };
-
-  for (const paragraph of paragraphs) {
-    if (isHeading(paragraph)) {
-      if (current.paragraphs.length > 0) sections.push(current);
-      current = { title: cleanHeading(paragraph), paragraphs: [] };
-      continue;
-    }
-    current.paragraphs.push(paragraph);
-  }
-
-  if (current.paragraphs.length > 0) sections.push(current);
-
-  return sections;
+function labelOf(paragraph: string): string | undefined {
+  return paragraph.match(/^([^:\n]{2,40}):\s/)?.[1]?.trim();
 }
 
 export function splitSentences(paragraph: string): string[] {
@@ -60,72 +29,49 @@ export function splitSentences(paragraph: string): string[] {
     .filter(Boolean);
 }
 
-function splitLongParagraph(paragraph: string): string[] {
-  const sentences = splitSentences(paragraph);
-  const blocks: string[] = [];
-  let buffer: string[] = [];
+function splitByTopic(paragraph: string, label: string | undefined): string[] {
+  if (paragraph.includes("\n")) return [paragraph];
 
-  for (const sentence of sentences) {
-    const candidate = [...buffer, sentence].join(" ");
-    if (buffer.length > 0 && candidate.length > TARGET_CHUNK_SIZE) {
-      blocks.push(buffer.join(" "));
-      buffer = [sentence];
-      continue;
+  const body = label ? paragraph.slice(paragraph.indexOf(":") + 1).trim() : paragraph;
+  const pieces: string[] = [];
+  let buffer = "";
+
+  for (const sentence of splitSentences(body)) {
+    if (buffer && buffer.length + sentence.length + 1 > MAX_CHUNK_SIZE) {
+      pieces.push(buffer);
+      buffer = "";
     }
-    buffer.push(sentence);
+    buffer = buffer ? `${buffer} ${sentence}` : sentence;
   }
+  if (buffer) pieces.push(buffer);
 
-  if (buffer.length > 0) blocks.push(buffer.join(" "));
-  return blocks;
-}
-
-export function deriveTitle(body: string, fallback: string): string {
-  const firstLine = body.split("\n")[0] ?? "";
-  const label = firstLine.match(/^([^:]{2,60}):\s/);
-  return label?.[1]?.trim() ?? fallback;
+  return label ? pieces.map((piece) => `${label}: ${piece}`) : pieces;
 }
 
 export function chunkCompanyDocument(text: string): CompanyChunk[] {
   const chunks: CompanyChunk[] = [];
+  let section = DEFAULT_SECTION;
 
-  for (const section of splitSections(text)) {
-    let buffer: string[] = [];
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
-    const flush = () => {
-      if (buffer.length === 0) return;
-
-      const body = buffer.join("\n\n");
-      const title = deriveTitle(body, section.title);
-      chunks.push({
-        text: `${section.title} — ${title}\n\n${body}`,
-        section: section.title,
-        title,
-        chunkIndex: chunks.length,
-      });
-
-      const sentences = splitSentences(body);
-      buffer =
-        OVERLAP_SENTENCES > 0 && sentences.length > OVERLAP_SENTENCES
-          ? [sentences.slice(-OVERLAP_SENTENCES).join(" ")]
-          : [];
-    };
-
-    for (const paragraph of section.paragraphs) {
-      const pieces =
-        paragraph.length > TARGET_CHUNK_SIZE
-          ? splitLongParagraph(paragraph)
-          : [paragraph];
-
-      for (const piece of pieces) {
-        const currentLength = buffer.join("\n\n").length;
-        if (currentLength > 0 && currentLength + piece.length > TARGET_CHUNK_SIZE) {
-          flush();
-        }
-        buffer.push(piece);
-      }
+  for (const paragraph of paragraphs) {
+    if (isHeading(paragraph)) {
+      section = paragraph.replace(/^#{1,6}\s*/, "").trim();
+      continue;
     }
 
-    flush();
+    const label = labelOf(paragraph);
+    for (const piece of splitByTopic(paragraph, label)) {
+      chunks.push({
+        text: piece,
+        section,
+        title: label ?? section,
+        chunkIndex: chunks.length,
+      });
+    }
   }
 
   return chunks;
@@ -144,7 +90,7 @@ export async function seedCompany(
   await repository.deleteBySource({ source: SOURCE });
 
   console.log(
-    `Seeding ${chunks.length} chunks (target=${TARGET_CHUNK_SIZE}, overlap=${OVERLAP_SENTENCES} frase(s))...`,
+    `Seeding ${chunks.length} chunks (um assunto por trecho, máximo ${MAX_CHUNK_SIZE} caracteres)...`,
   );
 
   for (const chunk of chunks) {
@@ -160,7 +106,7 @@ export async function seedCompany(
         chunkIndex: chunk.chunkIndex,
       },
     });
-    console.log(`  Indexed chunk id=${chunk.chunkIndex} section="${chunk.section}"`);
+    console.log(`  Indexed chunk id=${chunk.chunkIndex} title="${chunk.title}"`);
   }
 
   console.log("Company seeding complete.");
