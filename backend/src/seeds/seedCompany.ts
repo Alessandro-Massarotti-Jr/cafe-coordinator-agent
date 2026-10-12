@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ICompanyRepository } from "../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
+import { documentSparseVectors } from "../services/rag/sparseVectors";
 
 const MAX_CHUNK_SIZE = 300;
 const DEFAULT_SECTION = "Geral";
@@ -93,11 +94,14 @@ export async function seedCompany(
     `Seeding ${chunks.length} chunks (um assunto por trecho, máximo ${MAX_CHUNK_SIZE} caracteres)...`,
   );
 
-  for (const chunk of chunks) {
+  const sparseVectors = documentSparseVectors(chunks.map((chunk) => chunk.text));
+
+  for (const [position, chunk] of chunks.entries()) {
     const vector = await embedding.embed({ text: chunk.text });
     await repository.upsert({
       id: chunk.chunkIndex,
       vector,
+      sparseVector: sparseVectors[position]!,
       payload: {
         text: chunk.text,
         source: SOURCE,

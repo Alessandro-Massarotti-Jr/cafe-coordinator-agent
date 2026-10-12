@@ -4,17 +4,23 @@ import {
   ICompanyRepository,
 } from "../../../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../../../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
+import { hashToken } from "../../../services/rag/sparseVectors";
 
 const embedding: IEmbeddingProvider = {
   embed: async () => [0.1, 0.2],
 };
 
-function repositoryWith(results: CompanySearchResult[]): ICompanyRepository {
+function repositoryWith(
+  results: CompanySearchResult[],
+  calls: Array<Parameters<ICompanyRepository["hybridSearch"]>[0]> = [],
+): ICompanyRepository {
   return {
     upsert: async () => {},
     deleteBySource: async () => {},
-    search: async () => results,
-    listAll: async () => results.map((result) => result.payload),
+    hybridSearch: async (params) => {
+      calls.push(params);
+      return results;
+    },
   };
 }
 
@@ -29,11 +35,12 @@ describe("FindCompanyInfoTool", () => {
     expect(result.userFriendlyMessage).toContain("Não tenho essa informação");
   });
 
-  it("retorna score, confiança e metadados do trecho", async () => {
+  it("retorna similaridade, confiança e metadados do trecho", async () => {
     const tool = FindCompanyInfoTool.create(
       repositoryWith([
         {
-          score: 0.83,
+          score: 0.03,
+          similarity: 0.83,
           payload: {
             text: "Wi-Fi: rede gratuita",
             source: "company.txt",
@@ -59,7 +66,8 @@ describe("FindCompanyInfoTool", () => {
     const tool = FindCompanyInfoTool.create(
       repositoryWith([
         {
-          score: 0.2,
+          score: 0.03,
+          similarity: 0.2,
           payload: { text: "qualquer coisa", source: "company.txt" },
         },
       ]),
@@ -72,24 +80,16 @@ describe("FindCompanyInfoTool", () => {
     expect(result.userFriendlyMessage).toContain("Não tenho essa informação");
   });
 
-  it("usa a busca por palavra-chave para subir o trecho com o termo exato", async () => {
-    const tool = FindCompanyInfoTool.create(
-      repositoryWith([
-        {
-          score: 0.31,
-          payload: { text: "Pets: aceitamos animais no terraço", source: "company.txt" },
-        },
-        {
-          score: 0.3,
-          payload: { text: "Formas de pagamento: dinheiro e PIX", source: "company.txt" },
-        },
-      ]),
-      embedding,
+  it("envia o vetor denso e o vetor esparso da pergunta para a busca híbrida", async () => {
+    const calls: Array<Parameters<ICompanyRepository["hybridSearch"]>[0]> = [];
+    const tool = FindCompanyInfoTool.create(repositoryWith([], calls), embedding);
+
+    await tool.execute({ query: "aceita pix?" });
+
+    expect(calls[0]?.vector).toEqual([0.1, 0.2]);
+    expect(calls[0]?.sparseVector.indices).toEqual(
+      [hashToken("aceita"), hashToken("pix")].sort((a, b) => a - b),
     );
-
-    const result = await tool.execute({ query: "aceita pix?" });
-
-    expect(result.data?.[0]?.text).toBe("Formas de pagamento: dinheiro e PIX");
-    expect(result.data?.[0]?.score).toBe(0.3);
+    expect(calls[0]?.limit).toBe(3);
   });
 });

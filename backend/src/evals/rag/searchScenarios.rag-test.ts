@@ -135,6 +135,10 @@ if (combinations.length > 0) {
         await retriever.index(chunks);
       });
 
+      afterAll(async () => {
+        await retriever.dispose?.();
+      });
+
       it.each(SCENARIOS)("\"$input\" → \"$output\"", async (scenario) => {
         const retrieved = await retriever.search(scenario.input, TOP_K);
         const rank = rankOf(scenario.output, retrieved);

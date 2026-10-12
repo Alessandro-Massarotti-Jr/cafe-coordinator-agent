@@ -1,3 +1,5 @@
+import { SparseVector } from "../../../services/rag/sparseVectors";
+
 export type CompanyChunkPayload = {
   text: string;
   source: string;
@@ -8,6 +10,7 @@ export type CompanyChunkPayload = {
 
 export type CompanySearchResult = {
   score: number;
+  similarity: number;
   payload: CompanyChunkPayload;
 };
 
@@ -15,15 +18,15 @@ export interface ICompanyRepository {
   upsert(params: {
     id: number;
     vector: number[];
+    sparseVector: SparseVector;
     payload: Record<string, unknown>;
   }): Promise<void>;
 
   deleteBySource(params: { source: string }): Promise<void>;
 
-  search(params: {
+  hybridSearch(params: {
     vector: number[];
+    sparseVector: SparseVector;
     limit?: number;
   }): Promise<CompanySearchResult[]>;
-
-  listAll(): Promise<CompanyChunkPayload[]>;
 }

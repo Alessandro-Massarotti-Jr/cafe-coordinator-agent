@@ -1,14 +1,11 @@
 import { IEmbeddingProvider } from "../../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
-import {
-  CompanyChunkPayload,
-  CompanySearchResult,
-  ICompanyRepository,
-} from "../../repositories/companyRepository/interfaces/ICompanyRepository";
-import { hybridCompanySearch } from "../../services/rag/hybridCompanySearch";
-import { Bm25Index } from "../../services/rag/keywordSearch";
+import { cosine } from "../../services/rag/cosine";
+import { Bm25Index } from "./bm25";
 import { RagChunk } from "./chunkers";
+import { createQdrantRetriever } from "./qdrantRetrievers";
+import { reciprocalRankFusion } from "./reciprocalRankFusion";
 
-export { normalizeText } from "../../services/rag/keywordSearch";
+export { normalizeText } from "../../services/rag/tokenizer";
 
 export type RetrievedChunk = {
   chunk: RagChunk;
@@ -20,6 +17,7 @@ export type Retriever = {
   name: string;
   index(chunks: RagChunk[]): Promise<void>;
   search(query: string, limit: number): Promise<RetrievedChunk[]>;
+  dispose?(): Promise<void>;
 };
 
 export type RetrieverFactory = {
@@ -27,59 +25,6 @@ export type RetrieverFactory = {
   requiresEmbedding: boolean;
   create(embedding: IEmbeddingProvider): Retriever;
 };
-
-function cosine(a: number[], b: number[]): number {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    dot += x * y;
-    normA += x * x;
-    normB += y * y;
-  }
-  return normA === 0 || normB === 0 ? 0 : dot / Math.sqrt(normA * normB);
-}
-
-class InMemoryCompanyRepository implements ICompanyRepository {
-  private points: Array<{ vector: number[]; payload: CompanyChunkPayload }> = [];
-
-  async upsert({
-    vector,
-    payload,
-  }: {
-    id: number;
-    vector: number[];
-    payload: Record<string, unknown>;
-  }): Promise<void> {
-    this.points.push({ vector, payload: payload as unknown as CompanyChunkPayload });
-  }
-
-  async deleteBySource(): Promise<void> {
-    this.points = [];
-  }
-
-  async search({
-    vector,
-    limit = 3,
-  }: {
-    vector: number[];
-    limit?: number;
-  }): Promise<CompanySearchResult[]> {
-    return this.points
-      .map(({ vector: pointVector, payload }) => ({
-        score: cosine(vector, pointVector),
-        payload,
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
-  }
-
-  async listAll(): Promise<CompanyChunkPayload[]> {
-    return this.points.map(({ payload }) => payload);
-  }
-}
 
 function createKeywordRetriever(): Retriever {
   let chunks: RagChunk[] = [];
@@ -100,64 +45,60 @@ function createKeywordRetriever(): Retriever {
   };
 }
 
-function createIndexedRepository(embedding: IEmbeddingProvider) {
-  const repository = new InMemoryCompanyRepository();
-  const byText = new Map<string, RagChunk>();
-
-  return {
-    repository,
-    chunkOf: (payload: CompanyChunkPayload) => byText.get(payload.text)!,
-    async index(input: RagChunk[]) {
-      await repository.deleteBySource();
-      byText.clear();
-      for (const chunk of input) {
-        byText.set(chunk.text, chunk);
-        await repository.upsert({
-          id: chunk.id,
-          vector: await embedding.embed({ text: chunk.text }),
-          payload: { text: chunk.text, source: "company.txt", chunkIndex: chunk.id },
-        });
-      }
-    },
-  };
-}
-
 function createVectorRetriever(embedding: IEmbeddingProvider): Retriever {
-  const indexed = createIndexedRepository(embedding);
+  let indexed: Array<{ chunk: RagChunk; vector: number[] }> = [];
 
   return {
     name: "vector",
-    index: indexed.index,
+    async index(input) {
+      indexed = [];
+      for (const chunk of input) {
+        indexed.push({ chunk, vector: await embedding.embed({ text: chunk.text }) });
+      }
+    },
     async search(query, limit) {
       const vector = await embedding.embed({ text: query });
-      const results = await indexed.repository.search({ vector, limit });
-      return results.map(({ score, payload }) => ({
-        chunk: indexed.chunkOf(payload),
-        score,
-        similarity: score,
-      }));
+      return indexed
+        .map(({ chunk, vector: chunkVector }) => {
+          const similarity = cosine(vector, chunkVector);
+          return { chunk, score: similarity, similarity };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
     },
   };
 }
 
 function createHybridRetriever(embedding: IEmbeddingProvider): Retriever {
-  const indexed = createIndexedRepository(embedding);
+  const keyword = createKeywordRetriever();
+  const vector = createVectorRetriever(embedding);
+  const chunksById = new Map<number, RagChunk>();
 
   return {
     name: "hybrid",
-    index: indexed.index,
+    async index(input) {
+      chunksById.clear();
+      for (const chunk of input) chunksById.set(chunk.id, chunk);
+      await keyword.index(input);
+      await vector.index(input);
+    },
     async search(query, limit) {
-      const results = await hybridCompanySearch({
-        query,
-        repository: indexed.repository,
-        embedding,
-        limit,
-      });
-      return results.map(({ payload, score, similarity }) => ({
-        chunk: indexed.chunkOf(payload),
-        score,
-        similarity,
-      }));
+      const vectorRanking = await vector.search(query, chunksById.size);
+      const keywordRanking = await keyword.search(query, chunksById.size);
+      const similarities = new Map(
+        vectorRanking.map(({ chunk, score }) => [chunk.id, score]),
+      );
+
+      return reciprocalRankFusion([
+        keywordRanking.map(({ chunk }) => chunk.id),
+        vectorRanking.map(({ chunk }) => chunk.id),
+      ])
+        .slice(0, limit)
+        .map(({ key, score }) => ({
+          chunk: chunksById.get(key)!,
+          score,
+          similarity: similarities.get(key) ?? 0,
+        }));
     },
   };
 }
@@ -166,6 +107,16 @@ export const RETRIEVERS: RetrieverFactory[] = [
   { name: "keyword", requiresEmbedding: false, create: () => createKeywordRetriever() },
   { name: "vector", requiresEmbedding: true, create: createVectorRetriever },
   { name: "hybrid", requiresEmbedding: true, create: createHybridRetriever },
+  {
+    name: "sparse",
+    requiresEmbedding: false,
+    create: (embedding) => createQdrantRetriever("sparse", embedding),
+  },
+  {
+    name: "sparse-hybrid",
+    requiresEmbedding: true,
+    create: (embedding) => createQdrantRetriever("sparse-hybrid", embedding),
+  },
 ];
 
 export class CachedEmbeddingProvider implements IEmbeddingProvider {

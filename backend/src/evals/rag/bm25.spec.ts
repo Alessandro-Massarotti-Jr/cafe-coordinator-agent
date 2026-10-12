@@ -1,20 +1,4 @@
-import { Bm25Index, normalizeText, tokenize } from "./keywordSearch";
-
-describe("normalizeText", () => {
-  it("remove acentos e deixa minúsculo", () => {
-    expect(normalizeText("Cafés Especiais à Vontade")).toBe("cafes especiais a vontade");
-  });
-});
-
-describe("tokenize", () => {
-  it("remove palavras comuns e pontuação", () => {
-    expect(tokenize("Vocês aceitam PIX no balcão?")).toEqual([
-      "aceitam",
-      "pix",
-      "balcao",
-    ]);
-  });
-});
+import { Bm25Index } from "./bm25";
 
 describe("Bm25Index", () => {
   const index = new Bm25Index([
