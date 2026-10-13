@@ -1,9 +1,9 @@
 #!/bin/sh
 
-if [ ! -d ".env" ]; then
+if [ ! -f ".env" ]; then
     cp .env.sample .env
 fi
 
 npm install
 
-tail -f /dev/null
+npm run start:dev

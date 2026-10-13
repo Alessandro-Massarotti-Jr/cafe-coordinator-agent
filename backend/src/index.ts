@@ -24,6 +24,8 @@ import { ToolSession } from "./agents/ToolSession";
 import { Agent } from "./agents/Agent";
 import { seedCompany } from "./seeds/seedCompany";
 import { openSseStream, sendEvent, startHeartbeat } from "./http/sse";
+import { HandoffService } from "./services/HandoffService";
+import { createHandoffRoutes } from "./http/handoffRoutes";
 
 const app = express();
 app.use(express.json());
@@ -43,6 +45,7 @@ const runner = new AgentRunner(provider, tracer, {
 const compactor = new ContextCompactor(provider);
 const conversations = new ConversationStore(compactor);
 const customerMemory = new CustomerMemoryStore();
+const handoff = new HandoffService(escalationsRepository, conversations);
 
 const productsMcp = new McpToolProvider({
   url: process.env["PRODUCTS_MCP_URL"] ?? "http://products-mcp:3001/mcp",
@@ -85,7 +88,10 @@ setInterval(() => {
   }
 }, PENDING_CHAT_TTL_MS).unref();
 
-setInterval(() => conversations.prune(), CONVERSATION_PRUNE_MS).unref();
+setInterval(() => {
+  conversations.prune();
+  handoff.prune();
+}, CONVERSATION_PRUNE_MS).unref();
 
 app.post("/api/chat", (req, res) => {
   const { messages, sessionId, customerId } = req.body as {
@@ -99,8 +105,26 @@ app.post("/api/chat", (req, res) => {
     return;
   }
 
-  const streamId = randomUUID();
   const resolvedSessionId = sessionId ?? randomUUID();
+
+  if (sessionId && handoff.isWithHuman(sessionId)) {
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === "user");
+
+    if (lastUserMessage) {
+      handoff.receiveFromCustomer(sessionId, lastUserMessage.content);
+    }
+
+    res.status(202).json({
+      sessionId,
+      handledBy: "human",
+      escalation: handoff.activeEscalation(sessionId),
+    });
+    return;
+  }
+
+  const streamId = randomUUID();
 
   pendingChats.set(streamId, {
     messages,
@@ -152,6 +176,14 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
 
   const { messages, sessionId, customerId } = pending;
   const isNewConversation = conversations.isNew(sessionId);
+  const toolSession = new ToolSession(sessionId);
+
+  const incomingMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  if (incomingMessage) {
+    handoff.record(sessionId, "customer", incomingMessage.content);
+  }
 
   let requestRunId = "";
   try {
@@ -190,7 +222,7 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
       parentRunId: requestRunId,
       label: "Coordenador",
       onEvent,
-      session: new ToolSession(sessionId),
+      session: toolSession,
     });
 
     const finalMessage = result.content;
@@ -198,6 +230,11 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
     conversations.append(sessionId, [
       { role: "assistant", content: finalMessage },
     ]);
+    handoff.record(sessionId, "bot", finalMessage);
+
+    const escalation = toolSession.used("escalateToHuman")
+      ? handoff.activeEscalation(sessionId)
+      : undefined;
 
     if (customerId) {
       const lastUserMessage = [...messages]
@@ -232,6 +269,7 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
       message: finalMessage,
       sessionId,
       partial: result.degraded || result.limitReached,
+      escalation: escalation ?? null,
     });
   } catch (error) {
     if (requestRunId) {
@@ -251,9 +289,7 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
   }
 });
 
-app.get("/api/escalations", (_req, res) => {
-  res.json({ escalations: escalationsRepository.findAll() });
-});
+app.use("/api", createHandoffRoutes(handoff));
 
 const PORT = process.env["PORT"] ?? 3000;
 
@@ -273,6 +309,7 @@ async function bootstrap() {
     ordersAgent,
     recommendationAgent,
     escalationsRepository,
+    onEscalated: (escalation) => handoff.announceEscalation(escalation),
   });
 
   app.listen(PORT, () => {

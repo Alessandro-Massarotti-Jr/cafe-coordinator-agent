@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Italy Coffee · Atendimento</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" />
+  <link rel="stylesheet" href="/assets/tokens.css" />
+  <link rel="stylesheet" href="/assets/chat.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top-nav">
+      <a class="wordmark" href="/" aria-label="Italy Coffee">
+        <span class="wordmark-mark" data-icon="bean"></span>
+        <span class="wordmark-name">Italy Coffee</span>
+      </a>
+      <div class="agent-status" id="agent-status" aria-live="polite">
+        <span class="status-dot is-bot" id="agent-status-dot"></span>
+        <span id="agent-status-label">Assistente virtual</span>
+      </div>
+    </header>
+
+    <main class="chat" id="chat">
+      <section class="welcome" id="welcome">
+        <p class="caption-uppercase welcome-eyebrow">Cafeteria Italy Coffee</p>
+        <h1 class="display welcome-title">Como podemos te ajudar hoje?</h1>
+        <p class="welcome-lead">Pergunte sobre o cardápio, horários ou faça seu pedido. Se precisar, uma pessoa da nossa equipe assume a conversa.</p>
+        <div class="suggestions" id="suggestions">
+          <button class="suggestion" type="button">Qual o horário de funcionamento?</button>
+          <button class="suggestion" type="button">O que tem de doce no cardápio?</button>
+          <button class="suggestion" type="button">Quero fazer um pedido</button>
+          <button class="suggestion" type="button">Quero falar com um atendente</button>
+        </div>
+      </section>
+
+      <ol class="messages" id="messages" aria-live="polite"></ol>
+    </main>
+
+    <footer class="composer-dock">
+      <section class="handoff-card" id="handoff-card" hidden>
+        <div class="handoff-head">
+          <span class="status-dot is-waiting" id="handoff-dot"></span>
+          <span class="caption-uppercase handoff-eyebrow" id="handoff-eyebrow">Transferido para a equipe</span>
+          <span class="mono handoff-protocol" id="handoff-protocol"></span>
+        </div>
+        <p class="display handoff-title" id="handoff-title">Um atendente vai assumir em instantes</p>
+        <p class="handoff-body" id="handoff-body">Pode continuar escrevendo — suas mensagens já chegam para a equipe.</p>
+      </section>
+
+      <form class="composer" id="composer" autocomplete="off">
+        <label class="sr-only" for="input">Mensagem</label>
+        <textarea id="input" rows="1" placeholder="Escreva sua mensagem…"></textarea>
+        <button class="btn btn-primary btn-icon" id="send" type="submit" aria-label="Enviar" data-icon="send"></button>
+      </form>
+      <p class="composer-hint" id="composer-hint">O assistente virtual pode cometer erros. Peça um atendente a qualquer momento.</p>
+    </footer>
+  </div>
+
+  <script src="/assets/shared.js"></script>
+  <script src="/assets/chat.js"></script>
+</body>
+</html>

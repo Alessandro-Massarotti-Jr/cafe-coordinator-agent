@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Italy Coffee · Console de atendimento</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" />
+  <link rel="stylesheet" href="/assets/tokens.css" />
+  <link rel="stylesheet" href="/assets/console.css" />
+</head>
+<body>
+  <div class="console" id="console" data-view="list">
+    <header class="top-nav">
+      <a class="wordmark" href="/atendente/" aria-label="Italy Coffee — console">
+        <span class="wordmark-mark" data-icon="bean"></span>
+        <span class="wordmark-name">Italy Coffee</span>
+        <span class="wordmark-context">Console de atendimento</span>
+      </a>
+      <div class="nav-tools">
+        <span class="live" id="live" title="Conexão em tempo real">
+          <span class="status-dot is-offline" id="live-dot"></span>
+          <span id="live-label">Conectando…</span>
+        </span>
+        <label class="agent-field">
+          <span class="sr-only">Seu nome</span>
+          <span class="avatar avatar-human" id="agent-avatar">?</span>
+          <input class="text-input" id="agent-name" placeholder="Seu nome" maxlength="40" />
+        </label>
+      </div>
+    </header>
+
+    <aside class="queue" aria-label="Fila de atendimentos">
+      <div class="queue-head">
+        <h2 class="display queue-title">Fila</h2>
+        <span class="queue-count" id="queue-count">0 aguardando</span>
+      </div>
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab is-active" role="tab" data-filter="waiting" aria-selected="true"><span class="tab-count" data-count="waiting">0</span><span class="tab-label">Aguardando</span></button>
+        <button class="tab" role="tab" data-filter="in_progress" aria-selected="false"><span class="tab-count" data-count="in_progress">0</span><span class="tab-label">Atendendo</span></button>
+        <button class="tab" role="tab" data-filter="resolved" aria-selected="false"><span class="tab-count" data-count="resolved">0</span><span class="tab-label">Encerrados</span></button>
+      </div>
+      <ul class="queue-list" id="queue-list"></ul>
+      <div class="queue-empty" id="queue-empty">
+        <p>Nenhum atendimento aqui.</p>
+        <p class="queue-empty-hint">Quando o assistente virtual transferir uma conversa, ela aparece nesta fila em tempo real.</p>
+      </div>
+    </aside>
+
+    <main class="thread" id="thread" aria-label="Conversa">
+      <section class="thread-empty" id="thread-empty">
+        <p class="caption-uppercase thread-empty-eyebrow">Console de atendimento</p>
+        <h1 class="display thread-empty-title">Selecione um atendimento</h1>
+        <p class="thread-empty-body">Você vê a conversa completa com o assistente virtual e o resumo que ele preparou antes de assumir.</p>
+      </section>
+
+      <section class="thread-view" id="thread-view" hidden>
+        <header class="thread-head">
+          <button class="btn btn-secondary btn-icon thread-back" id="thread-back" type="button" aria-label="Voltar para a fila" data-icon="back"></button>
+          <div class="thread-who">
+            <h1 class="display thread-name" id="thread-name"></h1>
+            <div class="thread-sub">
+              <span class="mono" id="thread-protocol"></span>
+              <span class="badge-pill" id="thread-status"><span class="status-dot"></span><span></span></span>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-icon brief-toggle" id="brief-toggle" type="button" aria-label="Ver resumo da escalação" data-icon="panel"></button>
+          <div class="thread-actions">
+            <button class="btn btn-primary" id="claim-btn" type="button">Assumir atendimento</button>
+            <button class="btn btn-secondary" id="resolve-btn" type="button"><span class="label-long">Encerrar e devolver ao assistente</span><span class="label-short">Encerrar</span></button>
+          </div>
+        </header>
+
+        <ol class="transcript" id="transcript"></ol>
+
+        <footer class="reply-dock">
+          <p class="reply-note" id="reply-note"></p>
+          <form class="reply" id="reply" autocomplete="off">
+            <label class="sr-only" for="reply-input">Resposta ao cliente</label>
+            <textarea id="reply-input" rows="1" placeholder="Responder ao cliente…"></textarea>
+            <button class="btn btn-primary btn-icon" id="reply-send" type="submit" aria-label="Enviar resposta" data-icon="send"></button>
+          </form>
+        </footer>
+      </section>
+    </main>
+
+    <aside class="brief" id="brief" aria-label="Resumo da escalação">
+      <div class="brief-inner" id="brief-inner">
+        <div class="brief-top">
+          <p class="caption-uppercase brief-eyebrow">Resumo da escalação</p>
+          <button class="btn btn-secondary btn-icon brief-close" id="brief-close" type="button" aria-label="Fechar resumo" data-icon="close"></button>
+        </div>
+        <div id="brief-content"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/assets/shared.js"></script>
+  <script src="/assets/console.js"></script>
+</body>
+</html>

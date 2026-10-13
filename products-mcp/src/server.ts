@@ -4,7 +4,7 @@ import { listProductsController } from "./usecases/ListProductsUseCase";
 import { getProductDetailsController } from "./usecases/GetProductDetailsUseCase";
 import { findProductController } from "./usecases/FindProductUseCase";
 import { ToolResponse } from "./domain/ToolResponse";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 
 function toCallToolResult(response: ToolResponse) {

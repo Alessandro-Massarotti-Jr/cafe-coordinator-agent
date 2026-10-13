@@ -1,5 +1,6 @@
 import { EscalateToHumanTool } from "./EscalateToHumanTool";
 import { InMemoryEscalationsRepository } from "../../../repositories/escalationsRepository/implementations/InMemoryEscalationsRepository";
+import { ToolSession } from "../../ToolSession";
 
 function validPayload() {
   return {
@@ -24,6 +25,33 @@ describe("EscalateToHumanTool", () => {
     expect(result.data?.protocol).toMatch(/^ESC-\d{4}$/);
     expect(repository.findAll().length).toBe(before + 1);
     expect(result.userFriendlyMessage).toContain(result.data!.protocol);
+  });
+
+  it("vincula a escalação à sessão da conversa", async () => {
+    const repository = InMemoryEscalationsRepository.getInstance();
+    const tool = EscalateToHumanTool.create(repository);
+
+    const result = await tool.execute(validPayload(), {
+      session: new ToolSession("sessao-123"),
+    });
+
+    expect(result.data?.sessionId).toBe("sessao-123");
+    expect(result.data?.status).toBe("waiting");
+    expect(repository.findActiveBySession("sessao-123")?.protocol).toBe(
+      result.data?.protocol,
+    );
+  });
+
+  it("notifica a escalação assim que é registrada", async () => {
+    const onEscalated = jest.fn();
+    const tool = EscalateToHumanTool.create(
+      InMemoryEscalationsRepository.getInstance(),
+      onEscalated,
+    );
+
+    const result = await tool.execute(validPayload());
+
+    expect(onEscalated).toHaveBeenCalledWith(result.data);
   });
 
   it("recusa payload incompleto com validation", async () => {

@@ -1,0 +1,354 @@
+.app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.wordmark-mark {
+  color: var(--primary);
+  display: inline-flex;
+}
+
+.agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 6px 14px;
+  border-radius: var(--rounded-pill);
+  background: var(--surface-card);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.welcome,
+.messages,
+.composer-dock > * {
+  width: 100%;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.welcome {
+  padding: 96px var(--space-lg) var(--space-xxl);
+}
+
+.welcome[hidden] {
+  display: none;
+}
+
+.welcome-eyebrow {
+  color: var(--primary);
+  margin-bottom: var(--space-md);
+}
+
+.welcome-title {
+  font-size: 56px;
+  line-height: 1.05;
+  letter-spacing: -1.5px;
+  max-width: 13ch;
+}
+
+.welcome-lead {
+  margin-top: var(--space-lg);
+  max-width: 52ch;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--body);
+}
+
+.suggestions {
+  margin-top: var(--space-xl);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.suggestion {
+  text-align: left;
+  padding: var(--space-md) 20px;
+  background: var(--surface-card);
+  border: 1px solid transparent;
+  border-radius: var(--rounded-lg);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.suggestion:active {
+  background: var(--surface-cream-strong);
+}
+
+.suggestion:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+
+.messages {
+  list-style: none;
+  padding: var(--space-xl) var(--space-lg) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.messages:empty {
+  padding: 0;
+}
+
+.msg {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  animation: rise 0.22s ease-out;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.msg-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.msg-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.msg-meta time {
+  font-weight: 400;
+  color: var(--muted-soft);
+}
+
+.msg-role {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.msg-text {
+  color: var(--body-strong);
+  font-size: 16px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.msg-user {
+  justify-content: flex-end;
+}
+
+.msg-user .msg-text {
+  max-width: min(560px, 85%);
+  margin-left: auto;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-card);
+  border-radius: var(--rounded-lg);
+  border-bottom-right-radius: var(--rounded-xs);
+  color: var(--ink);
+}
+
+.msg-user .msg-body {
+  align-items: flex-end;
+  width: 100%;
+}
+
+.msg-human .msg-text {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rounded-lg);
+  border-top-left-radius: var(--rounded-xs);
+}
+
+.msg-pending .msg-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.msg-error .msg-text {
+  color: var(--error);
+  font-size: 14px;
+}
+
+.msg-system {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.msg-system::before,
+.msg-system::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.composer-dock {
+  flex-shrink: 0;
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
+  background: var(--canvas);
+}
+
+.handoff-card {
+  margin-bottom: var(--space-sm);
+  padding: 20px var(--space-lg);
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  border-radius: var(--rounded-lg);
+}
+
+.handoff-card[hidden] {
+  display: none;
+}
+
+.handoff-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--on-dark-soft);
+}
+
+.handoff-protocol {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: var(--rounded-pill);
+  background: var(--surface-dark-elevated);
+  color: var(--on-dark);
+}
+
+.handoff-title {
+  margin-top: var(--space-sm);
+  color: var(--on-dark);
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.handoff-body {
+  margin-top: 6px;
+  color: var(--on-dark-soft);
+  font-size: 14px;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  padding-left: var(--space-md);
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rounded-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.composer:focus-within {
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+
+.composer textarea {
+  overflow-y: hidden;
+  flex: 1;
+  min-height: 40px;
+  max-height: 180px;
+  padding: 9px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted-soft);
+}
+
+.composer-hint {
+  margin-top: var(--space-xs);
+  text-align: center;
+  color: var(--muted-soft);
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .top-nav {
+    padding: 0 var(--space-md);
+  }
+
+  .welcome {
+    padding: var(--space-xxl) var(--space-md) var(--space-lg);
+  }
+
+  .welcome-title {
+    font-size: 36px;
+    letter-spacing: -0.5px;
+  }
+
+  .welcome-lead {
+    font-size: 16px;
+  }
+
+  .suggestions {
+    grid-template-columns: 1fr;
+  }
+
+  .messages {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .composer-dock {
+    padding: var(--space-xs) var(--space-md) var(--space-sm);
+  }
+
+  .handoff-card {
+    padding: var(--space-md);
+  }
+
+  .handoff-title {
+    font-size: 22px;
+  }
+
+  .msg .avatar {
+    width: 28px;
+    height: 28px;
+  }
+}

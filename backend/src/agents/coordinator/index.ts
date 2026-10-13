@@ -1,7 +1,10 @@
 import { Agent } from "../Agent";
 import { modelFor } from "../AgentModel";
 import { DelegateAgentTool } from "./tools/DelegateAgentTool";
-import { EscalateToHumanTool } from "./tools/EscalateToHumanTool";
+import {
+  EscalateToHumanTool,
+  OnEscalated,
+} from "./tools/EscalateToHumanTool";
 import { AgentRunner } from "../../services/AgentRunner";
 import { IEscalationsRepository } from "../../repositories/escalationsRepository/interfaces/IEscalationsRepository";
 
@@ -12,6 +15,7 @@ type CoordinatorDeps = {
   ordersAgent: Agent;
   recommendationAgent: Agent;
   escalationsRepository: IEscalationsRepository;
+  onEscalated?: OnEscalated;
 };
 
 export function createCoordinatorAgent(deps: CoordinatorDeps): Agent {
@@ -22,6 +26,7 @@ export function createCoordinatorAgent(deps: CoordinatorDeps): Agent {
     ordersAgent,
     recommendationAgent,
     escalationsRepository,
+    onEscalated,
   } = deps;
 
   const agent = Agent.create({
@@ -149,7 +154,7 @@ Tom: acolhedor, atencioso e eficiente.
     }),
   );
 
-  agent.addTool(EscalateToHumanTool.create(escalationsRepository));
+  agent.addTool(EscalateToHumanTool.create(escalationsRepository, onEscalated));
 
   return agent;
 }

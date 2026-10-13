@@ -1,4 +1,4 @@
-import { Tool } from "../../Tool";
+import { Tool, ToolContext } from "../../Tool";
 import { ToolResponse, toolError, toolSuccess } from "../../ToolResponse";
 import {
   Escalation,
@@ -24,10 +24,16 @@ type EscalateParams = {
   conversationSummary?: string;
 };
 
+export type OnEscalated = (escalation: Escalation) => void;
+
 export class EscalateToHumanTool extends Tool {
   private escalations: IEscalationsRepository;
+  private onEscalated: OnEscalated | undefined;
 
-  private constructor(escalations: IEscalationsRepository) {
+  private constructor(
+    escalations: IEscalationsRepository,
+    onEscalated?: OnEscalated,
+  ) {
     super({
       name: "escalateToHuman",
       description:
@@ -35,6 +41,7 @@ export class EscalateToHumanTool extends Tool {
     });
 
     this.escalations = escalations;
+    this.onEscalated = onEscalated;
 
     this.addParameter({
       name: "customerName",
@@ -96,12 +103,14 @@ export class EscalateToHumanTool extends Tool {
 
   public static create(
     escalations: IEscalationsRepository,
+    onEscalated?: OnEscalated,
   ): EscalateToHumanTool {
-    return new EscalateToHumanTool(escalations);
+    return new EscalateToHumanTool(escalations, onEscalated);
   }
 
   public async execute(
     params: EscalateParams,
+    context?: ToolContext,
   ): Promise<ToolResponse<Escalation>> {
     const missing = (
       [
@@ -144,7 +153,10 @@ export class EscalateToHumanTool extends Tool {
         : [],
       orderId: params.orderId,
       conversationSummary: params.conversationSummary,
+      sessionId: context?.session?.sessionId,
     });
+
+    this.onEscalated?.(escalation);
 
     return toolSuccess({
       message: `Escalação ${escalation.protocol} registrada (motivo: ${escalation.reason}). Informe o protocolo ao cliente.`,
