@@ -10,6 +10,7 @@ import { Parameter, Tool } from "../../../agents/Tool";
 import { withRetry } from "../../../services/retry";
 
 const DEFAULT_NUM_PREDICT = -1;
+const DEFAULT_NUM_CTX = 1024 * 200;
 
 export function toStopReason(
   doneReason: string | undefined,
@@ -25,6 +26,7 @@ export function toStopReason(
 export class OllamaLlmProvider implements ILlmProvider {
   private requester: AxiosInstance;
   private numPredict: number;
+  private numCtx: number;
 
   constructor() {
     const baseURL = process.env.OLLAMA_URL as string;
@@ -32,6 +34,7 @@ export class OllamaLlmProvider implements ILlmProvider {
     this.numPredict = Number(
       process.env["OLLAMA_NUM_PREDICT"] ?? DEFAULT_NUM_PREDICT,
     );
+    this.numCtx = Number(process.env["OLLAMA_NUM_CTX"] ?? DEFAULT_NUM_CTX);
   }
 
   async chat(data: {
@@ -47,7 +50,7 @@ export class OllamaLlmProvider implements ILlmProvider {
           messages: messages,
           tools: this.formatTools(agent.tools),
           stream: false,
-          options: { num_predict: this.numPredict },
+          options: { num_predict: this.numPredict, num_ctx: this.numCtx },
         }),
       );
 
