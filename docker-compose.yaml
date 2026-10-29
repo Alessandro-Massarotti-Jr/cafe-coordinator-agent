@@ -13,6 +13,7 @@ services:
       - "3000"
     depends_on:
       - ollama
+      - qdrant
       - products-mcp
 
   products-mcp:
@@ -27,13 +28,23 @@ services:
     expose:
       - "3001"
 
-  frontend:
+  frontend-chat:
     image: nginx:alpine
     volumes:
-      - ./frontend/public:/usr/share/nginx/html:ro
-      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend-chat/public:/usr/share/nginx/html:ro
+      - ./frontend-chat/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "8080:80"
+      - "3001:80"
+    depends_on:
+      - backend
+
+  frontend-atendente:
+    image: nginx:alpine
+    volumes:
+      - ./frontend-atendente/public:/usr/share/nginx/html:ro
+      - ./frontend-atendente/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "3002:80"
     depends_on:
       - backend
 

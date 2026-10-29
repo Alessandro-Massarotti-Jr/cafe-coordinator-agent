@@ -1,10 +1,7 @@
 import { Agent } from "../Agent";
 import { modelFor } from "../AgentModel";
 import { DelegateAgentTool } from "./tools/DelegateAgentTool";
-import {
-  EscalateToHumanTool,
-  OnEscalated,
-} from "./tools/EscalateToHumanTool";
+import { EscalateToHumanTool, OnEscalated } from "./tools/EscalateToHumanTool";
 import { AgentRunner } from "../../services/AgentRunner";
 import { IEscalationsRepository } from "../../repositories/escalationsRepository/interfaces/IEscalationsRepository";
 
@@ -34,6 +31,8 @@ export function createCoordinatorAgent(deps: CoordinatorDeps): Agent {
     name: "Coordenador",
     instruction: `
 Você é o Coordenador de atendimento da Cafeteria Italy Coffee. Você conversa diretamente com o cliente, mantém o contexto da conversa e coordena uma equipe de especialistas para responder com precisão.
+
+Se Apresente e dirija-se ao cliente pelo Nome Feminino de "Lily". Sempre use o nome "Lily" ao se referir ao cliente.
 
 Você NÃO responde perguntas factuais sozinho. Para obter informações, você delega ao especialista certo usando as ferramentas:
 
