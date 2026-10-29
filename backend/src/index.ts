@@ -12,7 +12,7 @@ import { QdrantCompanyRepository } from "./repositories/companyRepository/implem
 import { InMemoryOrdersRepository } from "./repositories/ordersRepository/implementations/InMemoryOrdersRepository";
 import { InMemoryEscalationsRepository } from "./repositories/escalationsRepository/implementations/InMemoryEscalationsRepository";
 import { OllamaEmbeddingProvider } from "./providers/EmbeddingProvider/implementations/OllamaEmbeddingProvider";
-import { LangSmithAgentTracingProvider } from "./providers/AgentTracingProvider/implementations/LangSmithAgentTracingProvider";
+import { createTracingProvider } from "./providers/AgentTracingProvider/createTracingProvider";
 import { McpToolProvider } from "./providers/McpToolProvider/McpToolProvider";
 import { AgentRunner } from "./services/AgentRunner";
 import { ContextCompactor } from "./services/ContextCompactor";
@@ -31,7 +31,7 @@ const app = express();
 app.use(express.json());
 
 const provider = new OllamaLlmProvider();
-const tracer = new LangSmithAgentTracingProvider();
+const tracer = createTracingProvider();
 const embedding = new OllamaEmbeddingProvider();
 
 const companyRepository = QdrantCompanyRepository.getInstance();
@@ -190,8 +190,17 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
     ({ runId: requestRunId } = await tracer.startRun({
       name: "ChatRequest",
       runType: "chain",
-      inputs: { messages, sessionId },
-      tags: ["chat", "coordinator"],
+      inputs: { message: incomingMessage?.content ?? null, messages },
+      tags: [
+        "chat",
+        isNewConversation ? "new-conversation" : "ongoing-conversation",
+      ],
+      metadata: {
+        thread_id: sessionId,
+        customerId,
+        isNewConversation,
+        streamId,
+      },
     }));
 
     const stored = conversations.getOrCreate(sessionId, customerId ?? undefined);
@@ -203,7 +212,10 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
       if (lastTurn) conversations.append(sessionId, [lastTurn]);
     }
 
-    await conversations.compactIfNeeded(sessionId);
+    await conversations.compactIfNeeded(sessionId, {
+      tracer,
+      parentRunId: requestRunId,
+    });
 
     const memory =
       isNewConversation && customerId
@@ -250,7 +262,20 @@ app.get("/api/chat/stream/:streamId", async (req, res) => {
 
     await tracer.endRun({
       runId: requestRunId,
-      outputs: { message: finalMessage },
+      outputs: {
+        message: finalMessage,
+        partial: result.degraded || result.limitReached,
+        failures: result.failures,
+        escalation: escalation?.protocol ?? null,
+        toolsUsed: toolSession.history().map((usage) => usage.name),
+        usage: result.usage,
+      },
+      metadata: {
+        degraded: result.degraded,
+        limitReached: result.limitReached,
+        escalated: Boolean(escalation),
+        clientAborted: aborted,
+      },
     });
 
     if (result.degraded || result.limitReached) {

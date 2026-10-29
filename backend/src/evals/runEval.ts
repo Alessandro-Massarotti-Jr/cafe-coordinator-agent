@@ -6,19 +6,27 @@ import { createOrdersAgent } from "../agents/orders";
 import { createRecommendationAgent } from "../agents/recommendation";
 import { OllamaLlmProvider } from "../providers/LlmProvider/implementations/OllamaLlmProvider";
 import { OllamaEmbeddingProvider } from "../providers/EmbeddingProvider/implementations/OllamaEmbeddingProvider";
-import { LangSmithAgentTracingProvider } from "../providers/AgentTracingProvider/implementations/LangSmithAgentTracingProvider";
+import { createTracingProvider } from "../providers/AgentTracingProvider/createTracingProvider";
 import { QdrantCompanyRepository } from "../repositories/companyRepository/implementations/QdrantCompanyRepository";
 import { InMemoryOrdersRepository } from "../repositories/ordersRepository/implementations/InMemoryOrdersRepository";
 import { InMemoryEscalationsRepository } from "../repositories/escalationsRepository/implementations/InMemoryEscalationsRepository";
 import { McpToolProvider } from "../providers/McpToolProvider/McpToolProvider";
 import { AgentRunner } from "../services/AgentRunner";
-import { ResponseJudge } from "../services/ResponseJudge";
+import { JudgeVerdict, ResponseJudge } from "../services/ResponseJudge";
 import { ToolSession } from "../agents/ToolSession";
+import { traceSpan } from "../services/tracing/traceSpan";
 import { GOLDEN_DATASET, GoldenCase } from "./goldenDataset";
+
+type EvalOutcome = {
+  answer: string;
+  verdict: JudgeVerdict;
+  escalated: boolean;
+  approved: boolean;
+};
 
 async function main() {
   const provider = new OllamaLlmProvider();
-  const tracer = new LangSmithAgentTracingProvider();
+  const tracer = createTracingProvider();
   const embedding = new OllamaEmbeddingProvider();
 
   const runner = new AgentRunner(provider, tracer);
@@ -57,29 +65,65 @@ async function main() {
     const escalations = InMemoryEscalationsRepository.getInstance();
     const escalationsBefore = escalations.findAll().length;
 
-    const answer = await runner.run({
-      agent: coordinator,
-      messages: [
-        { role: "system", content: coordinator.getInstructions() },
-        { role: "user", content: testCase.question },
-      ],
-      parentRunId: runId,
-      label: `Eval/${testCase.id}`,
-      session: new ToolSession(`eval-${testCase.id}`),
-    });
+    const { verdict, escalated, approved } = await traceSpan<EvalOutcome>(
+      {
+        context: { tracer, parentRunId: runId },
+        name: `EvalCase/${testCase.id}`,
+        runType: "chain",
+        inputs: {
+          question: testCase.question,
+          expectations: testCase.expectations,
+          shouldEscalate: testCase.shouldEscalate ?? null,
+        },
+        tags: ["eval-case", `specialist:${testCase.specialist}`],
+        metadata: { caseId: testCase.id, specialist: testCase.specialist },
+        describe: (outcome) => ({
+          outputs: {
+            answer: outcome.answer,
+            verdict: outcome.verdict,
+            escalated: outcome.escalated,
+            approved: outcome.approved,
+          },
+          metadata: {
+            approved: outcome.approved,
+            score: outcome.verdict.score,
+          },
+        }),
+      },
+      async (caseTrace) => {
+        const answer = await runner.run({
+          agent: coordinator,
+          messages: [
+            { role: "system", content: coordinator.getInstructions() },
+            { role: "user", content: testCase.question },
+          ],
+          parentRunId: caseTrace.parentRunId,
+          session: new ToolSession(`eval-${testCase.id}`),
+        });
 
-    const verdict = await judge.evaluate({
-      question: testCase.question,
-      answer: answer.content,
-      expectations: testCase.expectations,
-    });
+        const verdict = await judge.evaluate(
+          {
+            question: testCase.question,
+            answer: answer.content,
+            expectations: testCase.expectations,
+          },
+          caseTrace,
+        );
 
-    const escalated = escalations.findAll().length > escalationsBefore;
-    const escalationOk =
-      testCase.shouldEscalate === undefined ||
-      testCase.shouldEscalate === escalated;
+        const escalated = escalations.findAll().length > escalationsBefore;
+        const escalationOk =
+          testCase.shouldEscalate === undefined ||
+          testCase.shouldEscalate === escalated;
 
-    const approved = verdict.approved && escalationOk;
+        return {
+          answer: answer.content,
+          verdict,
+          escalated,
+          approved: verdict.approved && escalationOk,
+        };
+      },
+    );
+
     results.push({ testCase, score: verdict.score, approved });
 
     console.log(
@@ -103,8 +147,6 @@ async function main() {
       total: results.length,
       passRate: passed / results.length,
       averageScore,
-    },
-    extra: {
       perCase: results.map((result) => ({
         id: result.testCase.id,
         specialist: result.testCase.specialist,
@@ -114,6 +156,7 @@ async function main() {
     },
   });
 
+  await tracer.flush();
   await productsMcp.close();
 }
 

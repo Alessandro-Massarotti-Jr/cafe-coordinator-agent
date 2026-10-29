@@ -1,6 +1,9 @@
 import { Agent } from "../agents/Agent";
 import { createJudgeAgent } from "../agents/judge";
 import { ILlmProvider } from "../providers/LlmProvider/interfaces/ILlmProvider";
+import { TraceContext } from "../providers/AgentTracingProvider/interfaces/IAgentTracingProvider";
+import { traceSpan } from "./tracing/traceSpan";
+import { tracedChat } from "./tracing/tracedChat";
 
 export type JudgeVerdict = {
   approved: boolean;
@@ -55,7 +58,30 @@ export class ResponseJudge {
     this.agent = agent;
   }
 
-  public async evaluate(input: JudgeInput): Promise<JudgeVerdict> {
+  public async evaluate(
+    input: JudgeInput,
+    trace?: TraceContext,
+  ): Promise<JudgeVerdict> {
+    return traceSpan<JudgeVerdict>(
+      {
+        context: trace,
+        name: "Judge/evaluate",
+        runType: "chain",
+        inputs: { ...input },
+        tags: ["judge"],
+        describe: (verdict) => ({
+          outputs: { ...verdict },
+          metadata: { approved: verdict.approved, score: verdict.score },
+        }),
+      },
+      (judgeTrace) => this.judge(input, judgeTrace),
+    );
+  }
+
+  private async judge(
+    input: JudgeInput,
+    trace: TraceContext,
+  ): Promise<JudgeVerdict> {
     const prompt = [
       `Pergunta do cliente:\n${input.question}`,
       `Resposta entregue ao cliente:\n${input.answer}`,
@@ -66,12 +92,14 @@ export class ResponseJudge {
       .filter(Boolean)
       .join("\n\n");
 
-    const result = await this.provider.chat({
+    const result = await tracedChat({
+      provider: this.provider,
       agent: this.agent,
       messages: [
         { role: "system", content: this.agent.getInstructions() },
         { role: "user", content: prompt },
       ],
+      context: trace,
     });
 
     return parseVerdict(result.message.content ?? "");

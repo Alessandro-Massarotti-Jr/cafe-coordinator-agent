@@ -1,4 +1,4 @@
-import { Tool } from "../../Tool";
+import { Tool, ToolContext } from "../../Tool";
 import { ToolResponse, toolSuccess } from "../../ToolResponse";
 import { ICompanyRepository } from "../../../repositories/companyRepository/interfaces/ICompanyRepository";
 import { IEmbeddingProvider } from "../../../providers/EmbeddingProvider/interfaces/IEmbeddingProvider";
@@ -36,16 +36,16 @@ export class FindCompanyInfoTool extends Tool {
     return new FindCompanyInfoTool(repository, embedding);
   }
 
-  public async execute({
-    query,
-  }: {
-    query: string;
-  }): Promise<ToolResponse<CompanyInfoResult[]>> {
+  public async execute(
+    { query }: { query: string },
+    context?: ToolContext,
+  ): Promise<ToolResponse<CompanyInfoResult[]>> {
     const results = await hybridCompanySearch({
       query,
       repository: this.repository,
       embedding: this.embedding,
       limit: SEARCH_LIMIT,
+      trace: context,
     });
 
     const passages: CompanyInfoResult[] = results.map((result) => ({

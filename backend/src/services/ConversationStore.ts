@@ -1,4 +1,5 @@
 import { Message } from "../providers/LlmProvider/interfaces/ILlmProvider";
+import { TraceContext } from "../providers/AgentTracingProvider/interfaces/IAgentTracingProvider";
 import { ContextCompactor } from "./ContextCompactor";
 
 export type Conversation = {
@@ -56,13 +57,17 @@ export class ConversationStore {
     conversation.updatedAt = Date.now();
   }
 
-  public async compactIfNeeded(sessionId: string): Promise<boolean> {
+  public async compactIfNeeded(
+    sessionId: string,
+    trace?: TraceContext,
+  ): Promise<boolean> {
     const conversation = this.conversations.get(sessionId);
     if (!conversation || !this.compactor) return false;
 
     const result = await this.compactor.compact({
       messages: conversation.messages,
       previousSummary: conversation.summary ?? undefined,
+      trace,
     });
 
     if (!result) return false;

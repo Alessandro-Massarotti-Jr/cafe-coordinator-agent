@@ -1,4 +1,5 @@
 import type {
+  RunType,
   StartRunDTO,
   StartRunResultDTO,
   EndRunDTO,
@@ -8,6 +9,7 @@ import type {
 } from "../dtos/AgentTracingDtos";
 
 export type {
+  RunType,
   StartRunDTO,
   StartRunResultDTO,
   EndRunDTO,
@@ -21,4 +23,10 @@ export interface IAgentTracingProvider {
   endRun(data: EndRunDTO): Promise<void>;
   startChildRun(data: StartChildRunDTO): Promise<StartChildRunResultDTO>;
   endChildRun(data: EndChildRunDTO): Promise<void>;
+  flush(): Promise<void>;
 }
+
+export type TraceContext = {
+  tracer?: IAgentTracingProvider | undefined;
+  parentRunId?: string | undefined;
+};

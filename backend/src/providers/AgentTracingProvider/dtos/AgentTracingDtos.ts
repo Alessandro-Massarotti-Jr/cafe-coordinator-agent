@@ -1,4 +1,4 @@
-export type RunType = "chain" | "llm" | "tool" | "retriever";
+export type RunType = "chain" | "llm" | "tool" | "retriever" | "embedding";
 
 export interface StartRunDTO {
   name: string;
@@ -16,7 +16,7 @@ export interface EndRunDTO {
   runId: string;
   outputs?: Record<string, unknown>;
   error?: string;
-  extra?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface StartChildRunDTO {
@@ -36,5 +36,5 @@ export interface EndChildRunDTO {
   childRunId: string;
   outputs?: Record<string, unknown>;
   error?: string;
-  extra?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }

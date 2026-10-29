@@ -1,4 +1,4 @@
-import { Tool } from "../../Tool";
+import { Tool, ToolContext } from "../../Tool";
 import { ToolResponse, toolError, toolSuccess } from "../../ToolResponse";
 import { McpToolProvider } from "../../../providers/McpToolProvider/McpToolProvider";
 import {
@@ -78,13 +78,16 @@ export class CreateOrderTool extends Tool {
     return new CreateOrderTool(productsMcp, orders);
   }
 
-  public async execute({
-    customerName,
-    items,
-  }: {
-    customerName: string;
-    items: RawItem[];
-  }): Promise<ToolResponse<Order>> {
+  public async execute(
+    {
+      customerName,
+      items,
+    }: {
+      customerName: string;
+      items: RawItem[];
+    },
+    context?: ToolContext,
+  ): Promise<ToolResponse<Order>> {
     if (!customerName || !String(customerName).trim()) {
       return toolError({
         errorCategory: "validation",
@@ -108,7 +111,7 @@ export class CreateOrderTool extends Tool {
     const orderItems: OrderItem[] = [];
 
     for (const item of items) {
-      const product = await this.findProduct(item.productId ?? "");
+      const product = await this.findProduct(item.productId ?? "", context);
       if (!product) {
         return toolError({
           errorCategory: "validation",
@@ -161,12 +164,17 @@ export class CreateOrderTool extends Tool {
     });
   }
 
-  private async findProduct(productId: string): Promise<McpProduct | undefined> {
+  private async findProduct(
+    productId: string,
+    context?: ToolContext,
+  ): Promise<McpProduct | undefined> {
     if (!productId) return undefined;
 
-    const response = (await this.productsMcp.callTool("getProductDetails", {
-      productId,
-    })) as McpToolResponse<{ product: McpProduct }>;
+    const response = (await this.productsMcp.callTool(
+      "getProductDetails",
+      { productId },
+      context,
+    )) as McpToolResponse<{ product: McpProduct }>;
 
     if (!response || response.isError || !response.data) {
       return undefined;

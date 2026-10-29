@@ -7,14 +7,19 @@ import {
   Message,
   ToolCall,
 } from "../providers/LlmProvider/interfaces/ILlmProvider";
-import { IAgentTracingProvider } from "../providers/AgentTracingProvider/interfaces/IAgentTracingProvider";
-import { AgentToolEvent } from "../agents/Tool";
+import {
+  IAgentTracingProvider,
+  TraceContext,
+} from "../providers/AgentTracingProvider/interfaces/IAgentTracingProvider";
+import { AgentToolEvent, Tool } from "../agents/Tool";
 import { ToolSession } from "../agents/ToolSession";
 import {
   ToolResponse,
   normalizeToolResponse,
   toolError,
 } from "../agents/ToolResponse";
+import { traceSpan } from "./tracing/traceSpan";
+import { tracedChat } from "./tracing/tracedChat";
 
 export type PostToolUseHook = (event: {
   toolName: string;
@@ -36,6 +41,39 @@ type RunParams = {
   label?: string | undefined;
   onEvent?: ((event: AgentToolEvent) => void) | undefined;
   session?: ToolSession | undefined;
+  agentPath?: string[] | undefined;
+  tags?: string[] | undefined;
+  metadata?: Record<string, unknown> | undefined;
+};
+
+type LoopParams = RunParams & {
+  path: string[];
+  trace: TraceContext;
+};
+
+type ToolCallOutcome =
+  | "executed"
+  | "exception"
+  | "tool_not_found"
+  | "invalid_arguments"
+  | "precondition_failed";
+
+type ToolCallResult = {
+  message: Message;
+  response: ToolResponse;
+  toolName: string;
+  outcome: ToolCallOutcome;
+};
+
+type ToolCallParams = {
+  agent: Agent;
+  toolCall: ToolCall;
+  index: number;
+  iteration: number;
+  path: string[];
+  trace: TraceContext;
+  onEvent: ((event: AgentToolEvent) => void) | undefined;
+  session: ToolSession | undefined;
 };
 
 export type RunResult = {
@@ -82,34 +120,70 @@ export class AgentRunner {
     this.postToolUse = options.postToolUse;
   }
 
-  public async run({
-    agent,
-    messages,
-    parentRunId,
-    label,
-    onEvent,
-    session,
-  }: RunParams): Promise<RunResult> {
+  public async run(params: RunParams): Promise<RunResult> {
+    const { agent, messages, parentRunId, label } = params;
+    const agentName = agent.getName();
+    const path = [...(params.agentPath ?? []), agentName];
+
+    return traceSpan<RunResult>(
+      {
+        context: { tracer: this.tracer, parentRunId },
+        name: `Agent/${label ?? agentName}`,
+        runType: "chain",
+        inputs: { messages },
+        tags: [
+          "agent",
+          `agent:${agentName}`,
+          path.length > 1 ? "sub-agent" : "root-agent",
+          ...(params.tags ?? []),
+        ],
+        metadata: {
+          agent: agentName,
+          model: agent.model,
+          depth: path.length - 1,
+          agentPath: path.join(" > "),
+          tools: agent.tools.map((tool) => tool.name),
+          sessionId: params.session?.sessionId,
+          ...params.metadata,
+        },
+        describe: (result) => ({
+          outputs: {
+            message: result.content,
+            stopReason: result.stopReason,
+            iterations: result.iterations,
+            degraded: result.degraded,
+            limitReached: result.limitReached,
+            failures: result.failures,
+            usage: result.usage,
+          },
+          metadata: {
+            stopReason: result.stopReason,
+            iterations: result.iterations,
+            degraded: result.degraded,
+            limitReached: result.limitReached,
+          },
+        }),
+      },
+      (trace) => this.loop({ ...params, path, trace }),
+    );
+  }
+
+  private async loop(params: LoopParams): Promise<RunResult> {
+    const { agent, messages, onEvent, session, path, trace } = params;
     const work: Message[] = [...messages];
-    const runName = label ?? agent.getName();
     const failures: string[] = [];
-
-    let runId: string | undefined;
-    if (this.tracer && parentRunId) {
-      ({ runId } = await this.tracer.startChildRun({
-        parentRunId,
-        name: runName,
-        runType: "llm",
-        inputs: { messages: work },
-      }));
-    }
-
-    const childParentId = runId ?? parentRunId;
     const total: LlmUsage = { ...EMPTY_USAGE };
+
+    let iterations = 0;
 
     const chat = async (): Promise<LlmChatResult> => {
       onEvent?.({ type: "thinking" });
-      const result = await this.chatWithRecovery(agent, work);
+      const result = await this.chatWithRecovery(
+        agent,
+        work,
+        trace,
+        iterations,
+      );
       total.prompt_tokens += result.usage.prompt_tokens;
       total.completion_tokens += result.usage.completion_tokens;
       total.total_tokens += result.usage.total_tokens;
@@ -117,7 +191,6 @@ export class AgentRunner {
     };
 
     let response = await chat();
-    let iterations = 0;
     let limitReached = false;
     let degraded = false;
 
@@ -141,7 +214,9 @@ export class AgentRunner {
             agent,
             toolCall,
             index,
-            parentRunId: childParentId,
+            iteration: iterations,
+            path,
+            trace,
             onEvent,
             session,
           }),
@@ -172,14 +247,6 @@ export class AgentRunner {
       content = content.trim() || NO_COMPLETION_MESSAGE;
     }
 
-    if (this.tracer && runId) {
-      await this.tracer.endChildRun({
-        childRunId: runId,
-        outputs: { message: content },
-        extra: { usage: total, stopReason: response.stopReason, degraded },
-      });
-    }
-
     return {
       content,
       usage: total,
@@ -194,12 +261,24 @@ export class AgentRunner {
   private async chatWithRecovery(
     agent: Agent,
     messages: Message[],
+    trace: TraceContext,
+    iteration: number,
   ): Promise<LlmChatResult> {
-    let result = await this.provider.chat({ agent, messages });
+    const call = (attempt: number) =>
+      tracedChat({
+        provider: this.provider,
+        agent,
+        messages: [...messages],
+        context: trace,
+        tags: attempt > 0 ? ["retry:no_completion"] : [],
+        metadata: { iteration, attempt },
+      });
+
+    let result = await call(0);
 
     for (let attempt = 0; attempt < this.noCompletionRetries; attempt++) {
       if (!this.isEmptyCompletion(result)) return result;
-      result = await this.provider.chat({ agent, messages });
+      result = await call(attempt + 1);
     }
 
     if (this.isEmptyCompletion(result)) {
@@ -218,24 +297,73 @@ export class AgentRunner {
     return !hasToolCalls && !hasContent;
   }
 
-  private async executeToolCall(params: {
-    agent: Agent;
-    toolCall: ToolCall;
-    index: number;
-    parentRunId: string | undefined;
-    onEvent: ((event: AgentToolEvent) => void) | undefined;
-    session: ToolSession | undefined;
-  }): Promise<{ message: Message; response: ToolResponse; toolName: string }> {
-    const { agent, toolCall, index, parentRunId, onEvent, session } = params;
+  private async executeToolCall(
+    params: ToolCallParams,
+  ): Promise<ToolCallResult> {
+    const { agent, toolCall, index, iteration, path, trace } = params;
 
     const toolName = toolCall.function.name;
     const toolCallId = toolCall.id ?? `${toolName}-${index}`;
+    const tool = agent.tools.find((candidate) => candidate.name === toolName);
+    const kind = tool?.kind ?? "unknown";
+
+    return traceSpan<ToolCallResult>(
+      {
+        context: trace,
+        name: `ToolCall/${toolName}`,
+        runType: "tool",
+        inputs: {
+          tool: toolName,
+          arguments: toolCall.function.arguments,
+          tool_call_id: toolCallId,
+        },
+        tags: ["tool-call", `tool:${toolName}`, `kind:${kind}`],
+        metadata: {
+          agent: agent.getName(),
+          agentPath: path.join(" > "),
+          tool: toolName,
+          kind,
+          iteration,
+          toolCallId,
+        },
+        describe: (result) => ({
+          outputs: { result: result.response },
+          error: result.response.isError
+            ? `[${result.response.errorCategory ?? "error"}] ${result.response.message}`
+            : undefined,
+          metadata: {
+            outcome: result.outcome,
+            isError: result.response.isError,
+            errorCategory: result.response.errorCategory ?? null,
+          },
+        }),
+      },
+      (toolTrace) =>
+        this.invokeTool(params, { toolName, toolCallId, tool, toolTrace }),
+    );
+  }
+
+  private async invokeTool(
+    params: ToolCallParams,
+    resolved: {
+      toolName: string;
+      toolCallId: string;
+      tool: Tool | undefined;
+      toolTrace: TraceContext;
+    },
+  ): Promise<ToolCallResult> {
+    const { agent, toolCall, path, onEvent, session } = params;
+    const { toolName, toolCallId, tool, toolTrace } = resolved;
 
     onEvent?.({ type: "tool_call", name: toolName });
 
-    const reply = (response: ToolResponse) => ({
+    const reply = (
+      response: ToolResponse,
+      outcome: ToolCallOutcome,
+    ): ToolCallResult => ({
       toolName,
       response,
+      outcome,
       message: {
         role: "tool",
         name: toolName,
@@ -243,8 +371,6 @@ export class AgentRunner {
         content: JSON.stringify(response),
       } as Message,
     });
-
-    const tool = agent.tools.find((candidate) => candidate.name === toolName);
 
     if (!tool) {
       return reply(
@@ -257,6 +383,7 @@ export class AgentRunner {
           userFriendlyMessage:
             "Não consegui executar essa ação com as ferramentas disponíveis.",
         }),
+        "tool_not_found",
       );
     }
 
@@ -274,28 +401,26 @@ export class AgentRunner {
           userFriendlyMessage:
             "Não consegui interpretar os dados dessa solicitação.",
         }),
+        "invalid_arguments",
       );
     }
 
     const precondition = tool.checkPrecondition(args, session);
-    if (precondition) return reply(precondition);
-
-    let toolRunId: string | undefined;
-    if (this.tracer && parentRunId) {
-      ({ runId: toolRunId } = await this.tracer.startChildRun({
-        parentRunId,
-        name: `Tool/${toolName}`,
-        runType: "tool",
-        inputs: { args },
-      }));
-    }
+    if (precondition) return reply(precondition, "precondition_failed");
 
     let response: ToolResponse;
+    let outcome: ToolCallOutcome = "executed";
     try {
       response = normalizeToolResponse(
-        await tool.execute(args, { parentRunId, onEvent, session }),
+        await tool.execute(args, {
+          ...toolTrace,
+          agentPath: path,
+          onEvent,
+          session,
+        }),
       );
     } catch (error) {
+      outcome = "exception";
       response = toolError({
         errorCategory: "transient",
         isRetryable: true,
@@ -319,14 +444,7 @@ export class AgentRunner {
       if (hooked) response = hooked;
     }
 
-    if (this.tracer && toolRunId) {
-      await this.tracer.endChildRun({
-        childRunId: toolRunId,
-        outputs: { result: response },
-      });
-    }
-
-    return reply(response);
+    return reply(response, outcome);
   }
 }
 

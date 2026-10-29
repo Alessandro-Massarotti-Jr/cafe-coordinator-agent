@@ -4,6 +4,9 @@ import {
   ILlmProvider,
   Message,
 } from "../providers/LlmProvider/interfaces/ILlmProvider";
+import { TraceContext } from "../providers/AgentTracingProvider/interfaces/IAgentTracingProvider";
+import { traceSpan } from "./tracing/traceSpan";
+import { tracedChat } from "./tracing/tracedChat";
 
 export type CompactorOptions = {
   maxMessages?: number;
@@ -94,10 +97,39 @@ export class ContextCompactor {
   public async compact(params: {
     messages: Message[];
     previousSummary?: string | undefined;
+    trace?: TraceContext | undefined;
   }): Promise<CompactionResult | null> {
     const { messages, previousSummary } = params;
 
     if (!this.needsCompaction(messages)) return null;
+
+    return traceSpan<CompactionResult>(
+      {
+        context: params.trace,
+        name: "Context/Compaction",
+        runType: "chain",
+        inputs: {
+          messageCount: messages.length,
+          keepRecent: this.keepRecent,
+          hasPreviousSummary: Boolean(previousSummary),
+        },
+        tags: ["context-compaction"],
+        describe: (result) => ({
+          outputs: {
+            summary: result.summary,
+            keptMessages: result.recent.length,
+          },
+        }),
+      },
+      (trace) => this.summarize(messages, previousSummary, trace),
+    );
+  }
+
+  private async summarize(
+    messages: Message[],
+    previousSummary: string | undefined,
+    trace: TraceContext,
+  ): Promise<CompactionResult> {
 
     const cutoff = messages.length - this.keepRecent;
     const older = messages.slice(0, cutoff);
@@ -121,12 +153,15 @@ export class ContextCompactor {
 
     let summary: string;
     try {
-      const result = await this.provider.chat({
+      const result = await tracedChat({
+        provider: this.provider,
         agent: this.summarizer,
         messages: [
           { role: "system", content: this.summarizer.getInstructions() },
           { role: "user", content: prompt },
         ],
+        context: trace,
+        tags: ["summarizer"],
       });
       summary = (result.message.content ?? "").trim();
     } catch {

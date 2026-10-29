@@ -23,7 +23,11 @@ export class DelegateAgentTool extends Tool {
   private readonly runner: AgentRunner;
 
   private constructor(props: DelegateProps) {
-    super({ name: props.name, description: props.description });
+    super({
+      name: props.name,
+      description: props.description,
+      kind: "delegation",
+    });
     this.agent = props.agent;
     this.runner = props.runner;
 
@@ -69,6 +73,13 @@ export class DelegateAgentTool extends Tool {
         label: specialist,
         onEvent: context?.onEvent,
         session: context?.session,
+        agentPath: context?.agentPath,
+        tags: ["delegated", `via:${this.name}`],
+        metadata: {
+          delegatedBy: context?.agentPath?.at(-1) ?? null,
+          delegationTool: this.name,
+          task: requestedTask,
+        },
       });
 
       const data: DelegateData = {

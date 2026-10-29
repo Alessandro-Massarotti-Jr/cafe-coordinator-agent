@@ -1,5 +1,6 @@
 import { ToolResponse } from "./ToolResponse";
 import { ToolSession } from "./ToolSession";
+import { TraceContext } from "../providers/AgentTracingProvider/interfaces/IAgentTracingProvider";
 
 export type Parameter =
   | {
@@ -23,15 +24,18 @@ export type Parameter =
       required: boolean;
     };
 
+export type ToolKind = "local" | "delegation" | "mcp";
+
 type ToolProps = {
   name: string;
   description: string;
+  kind?: ToolKind;
 };
 
 export type AgentToolEvent = { type: string; name?: string };
 
-export type ToolContext = {
-  parentRunId?: string | undefined;
+export type ToolContext = TraceContext & {
+  agentPath?: string[] | undefined;
   onEvent?: ((event: AgentToolEvent) => void) | undefined;
   session?: ToolSession | undefined;
 };
@@ -39,11 +43,13 @@ export type ToolContext = {
 export abstract class Tool {
   public readonly name: string;
   public readonly description: string;
+  public readonly kind: ToolKind;
   public readonly parameters: Parameter[] = [];
 
   protected constructor(props: ToolProps) {
     this.name = props.name;
     this.description = props.description;
+    this.kind = props.kind ?? "local";
   }
 
   public abstract execute(

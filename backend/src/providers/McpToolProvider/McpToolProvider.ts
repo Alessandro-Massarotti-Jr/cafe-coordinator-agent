@@ -2,10 +2,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { Tool } from "../../agents/Tool";
-import { McpTool } from "./McpTool";
-import { parseMcpResult } from "./parseMcpResult";
+import { McpTool, callMcpTool } from "./McpTool";
 import { toParameters } from "./schema";
 import { withRetry } from "../../services/retry";
+import { TraceContext } from "../AgentTracingProvider/interfaces/IAgentTracingProvider";
 
 export class McpToolProvider {
   private readonly url: string;
@@ -45,12 +45,10 @@ export class McpToolProvider {
   public async callTool(
     name: string,
     args: Record<string, unknown> = {},
+    trace?: TraceContext,
   ): Promise<unknown> {
     await this.connect();
-    const result = await withRetry(() =>
-      this.client!.callTool({ name, arguments: args }),
-    );
-    return parseMcpResult(result);
+    return callMcpTool({ client: this.client!, name, args, trace });
   }
 
   public async close(): Promise<void> {

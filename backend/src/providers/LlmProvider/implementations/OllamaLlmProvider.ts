@@ -9,7 +9,7 @@ import {
 import { Parameter, Tool } from "../../../agents/Tool";
 import { withRetry } from "../../../services/retry";
 
-const DEFAULT_NUM_PREDICT = 1024;
+const DEFAULT_NUM_PREDICT = -1;
 
 export function toStopReason(
   doneReason: string | undefined,
